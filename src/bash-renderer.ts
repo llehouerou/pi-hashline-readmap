@@ -27,18 +27,19 @@ const BASH_CALL_PREVIEW_STEPS = 10;
 /**
  * Split a shell command into display steps: one per top-level line, and one
  * per top-level `&&`, `||` or `;` (operator kept at the end of its step).
- * Quotes, backslash escapes and parentheses (subshells, `$(...)`) are
- * respected, so `echo "a && b"` or `x=$(a; b)` stay whole, and a newline
- * inside them (multi-line commit message, `\` continuation) stays inside its
- * step. Display only — not a shell parser.
+ * Quotes, backslash escapes, parentheses (subshells, `$(...)`) and heredoc
+ * bodies are respected, so `echo "a && b"` or `x=$(a; b)` stay whole, and a
+ * newline inside them (multi-line commit message, `\` continuation, `<<EOF`
+ * body) stays inside its step. Display only — not a shell parser.
  */
 export function splitShellSteps(command: string): string[] {
   const steps: string[] = [];
   let current = "";
   let quote: string | null = null;
   let depth = 0;
+  let heredocs: string[] = [];
   const push = () => {
-    if (current.trim()) steps.push(current.trimEnd());
+    if (current.trim()) steps.push(current.trim());
     current = "";
   };
   for (let i = 0; i < command.length; i++) {
@@ -57,14 +58,40 @@ export function splitShellSteps(command: string): string[] {
       if (ch === '"') quote = null;
       continue;
     }
+    if (ch === "\n" && heredocs.length > 0) {
+      // Swallow each pending heredoc body up to its terminator line.
+      let end = i;
+      for (const delimiter of heredocs) {
+        while (end < command.length) {
+          const nl = command.indexOf("\n", end + 1);
+          const lineEnd = nl === -1 ? command.length : nl;
+          const line = command.slice(end + 1, lineEnd);
+          end = lineEnd;
+          if (line.trim() === delimiter) break;
+        }
+      }
+      current += command.slice(i, end);
+      heredocs = [];
+      i = end - 1;
+      continue;
+    }
     if (ch === "\n" && depth === 0) {
       push();
       continue;
     }
+    if (ch === "<" && command[i + 1] === "<" && command[i + 2] !== "<" && command[i - 1] !== "<") {
+      const match = /^<<-?[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([^\s;&|<>()]+))/.exec(command.slice(i));
+      if (match) {
+        heredocs.push(match[1] ?? match[2] ?? match[3]!);
+        current += match[0];
+        i += match[0].length - 1;
+        continue;
+      }
+    }
     if (ch === "'" || ch === '"') quote = ch;
     else if (ch === "(") depth++;
     else if (ch === ")" && depth > 0) depth--;
-    else if (depth === 0) {
+    else if (depth === 0 && heredocs.length === 0) {
       const two = command.slice(i, i + 2);
       if (two === "&&" || two === "||" || (ch === ";" && two !== ";;")) {
         current += ch === ";" ? ch : two;
