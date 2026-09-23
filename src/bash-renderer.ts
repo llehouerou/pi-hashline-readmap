@@ -25,10 +25,12 @@ const BASH_PARAMETERS = Type.Object({
 const BASH_CALL_PREVIEW_STEPS = 10;
 
 /**
- * Split a shell command into display steps: one per source line, and one per
- * top-level `&&`, `||` or `;` (operator kept at the end of its step). Quotes,
- * backslash escapes and parentheses (subshells, `$(...)`) are respected, so
- * `echo "a && b"` or `x=$(a; b)` stay whole. Display only — not a shell parser.
+ * Split a shell command into display steps: one per top-level line, and one
+ * per top-level `&&`, `||` or `;` (operator kept at the end of its step).
+ * Quotes, backslash escapes and parentheses (subshells, `$(...)`) are
+ * respected, so `echo "a && b"` or `x=$(a; b)` stay whole, and a newline
+ * inside them (multi-line commit message, `\` continuation) stays inside its
+ * step. Display only — not a shell parser.
  */
 export function splitShellSteps(command: string): string[] {
   const steps: string[] = [];
@@ -41,22 +43,22 @@ export function splitShellSteps(command: string): string[] {
   };
   for (let i = 0; i < command.length; i++) {
     const ch = command[i]!;
-    if (ch === "\n") {
-      push();
-      continue;
-    }
     if (quote === "'") {
       current += ch;
       if (ch === "'") quote = null;
       continue;
     }
-    if (ch === "\\" && i + 1 < command.length && command[i + 1] !== "\n") {
+    if (ch === "\\" && i + 1 < command.length) {
       current += ch + command[++i];
       continue;
     }
     if (quote === '"') {
       current += ch;
       if (ch === '"') quote = null;
+      continue;
+    }
+    if (ch === "\n" && depth === 0) {
+      push();
       continue;
     }
     if (ch === "'" || ch === '"') quote = ch;
@@ -114,7 +116,11 @@ export function registerBashRendererTool(pi: Pick<ExtensionAPI, "registerTool">,
       const expanded = isRendererExpanded(undefined, context);
       const shown = expanded ? steps : steps.slice(0, BASH_CALL_PREVIEW_STEPS);
       const indent = " ".repeat("bash ".length);
-      const lines = shown.map((step, i) => (i === 0 ? `${renderToolLabel(theme, "bash")} ` : indent) + theme.fg("muted", step));
+      const lines = shown.flatMap((step, i) => {
+        const stepLines = step.split("\n");
+        const visible = expanded ? stepLines : [stepLines[0] + (stepLines.length > 1 ? " …" : "")];
+        return visible.map((line, j) => (i === 0 && j === 0 ? `${renderToolLabel(theme, "bash")} ` : indent) + theme.fg("muted", line));
+      });
       if (lines.length === 0) lines.push(renderToolLabel(theme, "bash"));
       const hidden = steps.length - shown.length;
       if (hidden > 0) lines.push(indent + theme.fg("muted", `… (${hidden} more${EXPAND_HINT})`));

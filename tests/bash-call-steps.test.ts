@@ -47,4 +47,22 @@ describe("bash renderCall", () => {
     expect(lines).toHaveLength(12);
     expect(lines[11]).toBe("     step12");
   });
+
+  it("collapses a multi-line step to its first line, expands it in full", () => {
+    const commit = `git add -A && git commit -m "subject\n\nbody" && git push`;
+    expect(splitShellSteps(commit)).toEqual(["git add -A &&", `git commit -m "subject\n\nbody" &&`, "git push"]);
+    expect(splitShellSteps("make \\\n  all")).toEqual(["make \\\n  all"]);
+    expect(textOf(tool.renderCall({ command: commit }, theme, { expanded: false })).split("\n")).toEqual([
+      "bash git add -A &&",
+      `     git commit -m "subject …`,
+      "     git push",
+    ]);
+    expect(textOf(tool.renderCall({ command: commit }, theme, { expanded: true })).split("\n")).toEqual([
+      "bash git add -A &&",
+      `     git commit -m "subject`,
+      "     ",
+      `     body" &&`,
+      "     git push",
+    ]);
+  });
 });
