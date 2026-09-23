@@ -1,7 +1,7 @@
 import { createBashTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { buildCollapsedPreview, clampLineToWidth, clampLinesToWidth, isRendererExpanded, renderToolLabel, summaryLine } from "./tui-render-utils.js";
+import { buildCollapsedPreview, clampLinesToWidth, EXPAND_HINT, isRendererExpanded, renderToolLabel, summaryLine } from "./tui-render-utils.js";
 import { resolvePreviewLines } from "./hashline-settings.js";
 import {
   buildRequiredNullParameterError,
@@ -21,6 +21,62 @@ const BASH_PARAMETERS = Type.Object({
   command: Type.String({ description: "Test/build/git/pkg/external command; not repo file read/search/list/edit." }),
   timeout: Type.Optional(Type.Number({ description: "Timeout seconds" })),
 });
+
+const BASH_CALL_PREVIEW_STEPS = 10;
+
+/**
+ * Split a shell command into display steps: one per source line, and one per
+ * top-level `&&`, `||` or `;` (operator kept at the end of its step). Quotes,
+ * backslash escapes and parentheses (subshells, `$(...)`) are respected, so
+ * `echo "a && b"` or `x=$(a; b)` stay whole. Display only — not a shell parser.
+ */
+export function splitShellSteps(command: string): string[] {
+  const steps: string[] = [];
+  let current = "";
+  let quote: string | null = null;
+  let depth = 0;
+  const push = () => {
+    if (current.trim()) steps.push(current.trimEnd());
+    current = "";
+  };
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (ch === "\n") {
+      push();
+      continue;
+    }
+    if (quote === "'") {
+      current += ch;
+      if (ch === "'") quote = null;
+      continue;
+    }
+    if (ch === "\\" && i + 1 < command.length && command[i + 1] !== "\n") {
+      current += ch + command[++i];
+      continue;
+    }
+    if (quote === '"') {
+      current += ch;
+      if (ch === '"') quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && depth > 0) depth--;
+    else if (depth === 0) {
+      const two = command.slice(i, i + 2);
+      if (two === "&&" || two === "||" || (ch === ";" && two !== ";;")) {
+        current += ch === ";" ? ch : two;
+        if (ch !== ";") i++;
+        push();
+        while (command[i + 1] === " " || command[i + 1] === "\t") i++;
+        continue;
+      }
+    }
+    current += ch;
+  }
+  push();
+  return steps;
+}
 
 export function registerBashRendererTool(pi: Pick<ExtensionAPI, "registerTool">, options: { cwd?: string; shellPath?: string; createBuiltInBashTool?: BuiltInFactory } = {}): any {
   const cache = new Map<string, any>();
@@ -54,9 +110,15 @@ export function registerBashRendererTool(pi: Pick<ExtensionAPI, "registerTool">,
       );
     },
     renderCall(args: any, theme: any, context: any = {}) {
-      const raw = String(args?.command ?? "");
-      const command = raw.split("\n")[0] + (raw.includes("\n") ? " …" : "");
-      return new Text(clampLineToWidth(`${renderToolLabel(theme, "bash")} ${theme.fg("muted", command)}`, context.width), 0, 0);
+      const steps = splitShellSteps(String(args?.command ?? ""));
+      const expanded = isRendererExpanded(undefined, context);
+      const shown = expanded ? steps : steps.slice(0, BASH_CALL_PREVIEW_STEPS);
+      const indent = " ".repeat("bash ".length);
+      const lines = shown.map((step, i) => (i === 0 ? `${renderToolLabel(theme, "bash")} ` : indent) + theme.fg("muted", step));
+      if (lines.length === 0) lines.push(renderToolLabel(theme, "bash"));
+      const hidden = steps.length - shown.length;
+      if (hidden > 0) lines.push(indent + theme.fg("muted", `… (${hidden} more${EXPAND_HINT})`));
+      return new Text(clampLinesToWidth(lines, context.width).join("\n"), 0, 0);
     },
     renderResult(result: any, optionsArg: any, _theme: any, context: any = {}) {
       const expanded = isRendererExpanded(optionsArg, context);
