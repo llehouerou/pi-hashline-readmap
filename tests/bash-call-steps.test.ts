@@ -27,6 +27,30 @@ describe("splitShellSteps", () => {
     expect(splitShellSteps("a\n\n  \nb")).toEqual(["a", "b"]);
     expect(splitShellSteps("")).toEqual([]);
   });
+
+  it("keeps a heredoc body inside its step", () => {
+    const command = [
+      "cd repo &&",
+      "  git add a &&",
+      "  git commit -q -F - <<'EOF'",
+      "subject (x); don't && split",
+      "",
+      "body",
+      "EOF",
+      "cat <<-END | grep x && echo ok",
+      "\tline",
+      "\tEND",
+      'grep -c x <<< "a"; echo "exit=$?"',
+    ].join("\n");
+    expect(splitShellSteps(command)).toEqual([
+      "cd repo &&",
+      "git add a &&",
+      "git commit -q -F - <<'EOF'\nsubject (x); don't && split\n\nbody\nEOF",
+      "cat <<-END | grep x && echo ok\n\tline\n\tEND",
+      'grep -c x <<< "a";',
+      'echo "exit=$?"',
+    ]);
+  });
 });
 
 describe("bash renderCall", () => {
