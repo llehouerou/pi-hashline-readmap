@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { registerBashRendererTool, splitShellSteps } from "../src/bash-renderer.js";
+import { getExpandHint } from "../src/tui-render-utils.js";
 
 const theme = { fg: (_style: string, text: string) => text, bold: (text: string) => text };
 const textOf = (component: any): string => component?.text ?? "";
@@ -63,7 +64,7 @@ describe("bash renderCall", () => {
     expect(lines[0]).toBe("bash step1 &&");
     expect(lines[1]).toBe("     step2 &&");
     expect(lines).toHaveLength(11);
-    expect(lines[10]).toBe("     … (2 more • Ctrl+O to expand)");
+    expect(lines[10]).toBe(`     … (2 more${getExpandHint()})`);
   });
 
   it("shows every step when expanded", () => {

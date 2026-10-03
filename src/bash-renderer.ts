@@ -1,7 +1,7 @@
 import { createBashTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { buildCollapsedPreview, clampLinesToWidth, EXPAND_HINT, isRendererExpanded, renderToolLabel, summaryLine } from "./tui-render-utils.js";
+import { buildCollapsedPreview, clampLinesToWidth, getExpandHint, isRendererExpanded, renderToolLabel, summaryLine } from "./tui-render-utils.js";
 import { resolvePreviewLines } from "./hashline-settings.js";
 import {
   buildRequiredNullParameterError,
@@ -154,7 +154,7 @@ export function registerBashRendererTool(pi: Pick<ExtensionAPI, "registerTool">,
       });
       if (lines.length === 0) lines.push(renderToolLabel(theme, "bash"));
       const hidden = steps.length - shown.length;
-      if (hidden > 0) lines.push(indent + theme.fg("muted", `… (${hidden} more${EXPAND_HINT})`));
+      if (hidden > 0) lines.push(indent + theme.fg("muted", `… (${hidden} more${getExpandHint()})`));
       return new Text(clampLinesToWidth(lines, context.width).join("\n"), 0, 0);
     },
     renderResult(result: any, optionsArg: any, _theme: any, context: any = {}) {
