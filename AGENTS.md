@@ -12,7 +12,7 @@ Repo-local guide for working on `pi-hashline-readmap`.
 - `ast_search` — ast-grep wrapper with hashlined output
 - `bash` filtering — command-aware output compression
 
-The extension is loaded via an absolute path entry in `~/.pi/agent/settings.json`'s `extensions` array (pointing at this workspace's `index.ts`), so **new agent sessions** pick up local edits automatically. Running sessions do **not** hot-reload the module graph — restart any in-flight agent session to see changes take effect.
+The checkout is installed as a pi package (the workspace path in `~/.pi/agent/settings.json`'s `packages`), and pi loads `package.json`'s `pi.extensions` entry: the bundled **`dist/index.js`**, not `index.ts`. `dist/` is gitignored and is not rebuilt by commits, merges, or rebases: **run `npm run build` after every source change**, then restart the session or `/reload`. Without it pi keeps running the previous build. Check with `grep` on `dist/index.js` that the change is in.
 
 ## Version Control
 
