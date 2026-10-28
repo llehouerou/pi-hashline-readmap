@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - An anchored `edit` after the extension's own successful `edit` or `write` to the same file no longer demands a re-read on the next turn. The own mutation used to expire the file's freshness, so the shift remapping added for own writes never ran across turns; a change made outside the extension (bash, another process) still requires fresh anchors.
 - `edit` and `write` declare Pi's sequential execution mode, so a turn that contains one runs its calls in order. A `read` batched after an `edit` of the same file used to run concurrently with it, could show the pre-edit file, and was treated as older than the edit, so the next anchored edit was refused. Turns without an `edit` or `write` still run in parallel.
+- A file that `bash` changes (`sed -i`, redirection, `tee`, `mv`, `cp`, `rm`, `install`) now always needs fresh anchors before an anchored `edit`. Freshness used to expire only through a stale earlier read, so a file known only from `write` or `edit` kept accepting its old anchors after a shell change.
 
 ## [0.16.1] - 2026-10-14
 
