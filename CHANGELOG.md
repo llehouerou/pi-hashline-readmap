@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `edit` and `write` declare Pi's sequential execution mode, so a turn that contains one runs its calls in order. A `read` batched after an `edit` of the same file used to run concurrently with it, could show the pre-edit file, and was treated as older than the edit, so the next anchored edit was refused. Turns without an `edit` or `write` still run in parallel.
 - A file that `bash` changes (`sed -i`, redirection, `tee`, `mv`, `cp`, `rm`, `install`) now always needs fresh anchors before an anchored `edit`. Freshness used to expire only through a stale earlier read, so a file known only from `write` or `edit` kept accepting its old anchors after a shell change.
 
+### Changed
+
+- The bash file-mutation classifier now reads every command of a chain (`&&`, `||`, `;`, `|`, `&`, newlines), not only the first: `mkdir -p d && mv a b` or `make || rm -f x` now mark their files changed, so earlier reads of them go stale. Relative targets resolve against the directory of a literal `cd` earlier in the chain and are dropped after a `cd` it cannot follow (`cd $X`, `cd -`, `cd ~`); heredoc bodies are no longer scanned for redirections.
+
 ## [0.16.1] - 2026-10-14
 
 ### Fixed
