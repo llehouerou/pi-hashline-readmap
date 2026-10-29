@@ -23,6 +23,7 @@ import { remapShiftedAnchors } from "./shifted-anchors.js";
 import type { PtcLine } from "./ptc-value.js";
 import { resolveToCwd } from "./path-utils.js";
 import { resolveMutationTargetPath, writeFileAtomically } from "./fs-write.js";
+import { formatGofmtError, gofmtGoSource } from "./gofmt.js";
 import { throwIfAborted } from "./runtime.js";
 import { buildEditOutput } from "./edit-output.js";
 import { classifyEdit, isDifftAvailable, runDifftastic } from "./edit-classify.js";
@@ -1121,6 +1122,7 @@ async function buildEditResult(input: {
 	replaceWarnings: string[];
 	replaceSymbolWarnings: string[];
 	syntaxWarning?: string;
+	gofmtError?: string;
 	/** Notes about lines a cross-file move_lines removed from its source file. */
 	moveNotes?: string[];
 	/** Notes about anchors remapped through an earlier edit that moved their lines. */
@@ -1147,6 +1149,7 @@ async function buildEditResult(input: {
 	if (input.replaceWarnings.length) warnings.push(...input.replaceWarnings);
 	if (input.replaceSymbolWarnings.length) warnings.push(...input.replaceSymbolWarnings);
 	if (input.syntaxWarning) warnings.push(input.syntaxWarning);
+	if (input.gofmtError) warnings.push(formatGofmtError(input.gofmtError));
 	if (input.moveNotes?.length) warnings.push(...input.moveNotes);
 
 	const internalClassification = classifyEdit(input.originalNormalized, input.result);
@@ -1270,7 +1273,7 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 					});
 					if (isEditErrorResult(replacementResult)) return recordErrorFeedback(options, absolutePath, replacementResult);
 					result = replacementResult.content;
-					const normalizedResult = normalizeToLF(result);
+					let normalizedResult = normalizeToLF(result);
 					const replaceWarnings = replacementResult.warnings;
 
 					const noopError = detectNoop({
@@ -1302,6 +1305,13 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 					if (isEditErrorResult(syntaxResult)) return syntaxResult;
 					const syntaxWarning = syntaxResult.warning;
 
+					// Go files are written gofmt-formatted, so the returned anchors describe the file on disk.
+					const gofmt = gofmtGoSource(absolutePath, result);
+					if (gofmt.formatted !== undefined) {
+						result = gofmt.formatted;
+						normalizedResult = normalizeToLF(result);
+					}
+
 					const writeResult = await finalizeWrite({
 						absolutePath,
 						displayPath: path,
@@ -1312,7 +1322,7 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 						physicalResult: preserveLineEndings ? result : undefined,
 					});
 					if (isEditErrorResult(writeResult)) return writeResult;
-					const shift = options.served?.remapAfterWrite(absolutePath, originalNormalized.split("\n"), normalizedResult.split("\n"), replaceEdits.length || replaceSymbolEdits.length ? undefined : anchorResult.lineMap);
+					const shift = options.served?.remapAfterWrite(absolutePath, originalNormalized.split("\n"), normalizedResult.split("\n"), replaceEdits.length || replaceSymbolEdits.length || gofmt.formatted !== undefined ? undefined : anchorResult.lineMap);
 					// This write's shifts are remapped above, so a view that was fresh before it stays fresh.
 					if (options.wasReadInSession?.(absolutePath)) options.onFileAnchored?.(absolutePath, { own: true });
 					const moveNotes = await commitSourceRemovals(sourceRemovals, options, path);
@@ -1332,6 +1342,7 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 						replaceWarnings,
 						replaceSymbolWarnings,
 						syntaxWarning,
+						gofmtError: gofmt.error,
 						moveNotes,
 						anchorNotes: [...shifted.notes, ...describeOwnShift(shift)],
 					});

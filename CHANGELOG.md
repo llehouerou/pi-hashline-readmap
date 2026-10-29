@@ -87,6 +87,10 @@ Anchor freshness now matches what the model sees: the extension's own edits keep
 - `bash` commands are checked for file changes in every command of a chain (after `;`, `&&`, `||`, `|`, newlines, keywords such as `if`/`then`, `NAME=value` prefixes, subshells and `$(…)` substitutions), not only in the first word of the line. Heredoc bodies and a quoted `>` no longer count as writes, and `<<<` no longer opens a heredoc. Relative targets resolve against a literal `cd` earlier in the command; after a `cd` it cannot follow, only absolute targets count, and a subshell's `cd` ends at its `)`. A command behind `sudo`, `env`, `command`, `exec` or `xargs` is still not detected. Based on #240 by @llehouerou.
 - A file that a `bash` command changes needs fresh anchors before the next anchored `edit`, even when the command failed or the file is known only from `write` or `edit`. Freshness used to expire only through a stale earlier read, and only after a successful command, so a file known only from `write` or `edit`, or one changed by a failed `cmd > file`, kept accepting its old anchors. Based on #239 by @llehouerou.
 
+### Added
+
+- `edit` and `write` format `*.go` files with `gofmt` before writing them when `gofmt` is on `PATH`, so the returned anchors and the file's freshness describe the formatted file. When `gofmt` rejects the content (a syntax error), it is written as given and `gofmt`'s error is appended to the result.
+
 ## [0.16.1] - 2026-10-14
 
 ### Fixed
