@@ -1,4 +1,6 @@
-const GIT_COMMANDS = ["git diff", "git status", "git log", "git show", "git stash"];
+// git diff and git show pass through untouched: reviews need the whole diff, and the
+// bash context guard already offloads oversized output to a file.
+const GIT_COMMANDS = ["git status", "git log"];
 
 export function isGitCommand(command: string | undefined | null): boolean {
 	if (typeof command !== "string" || command.length === 0) {
@@ -7,143 +9,6 @@ export function isGitCommand(command: string | undefined | null): boolean {
 
 	const cmdLower = command.toLowerCase();
 	return GIT_COMMANDS.some((gc) => cmdLower.startsWith(gc));
-}
-
-export function compactDiff(output: string, maxLines: number = 100): string {
-	const lines = output.split("\n");
-	const result: string[] = [];
-	let currentFile = "";
-	let added = 0;
-	let removed = 0;
-	let inHunk = false;
-	const maxContextPerSide = 3;
-	// Per-hunk accumulators
-	let hunkChangeLines: string[] = [];   // +/- lines plus interstitial context
-	let hunkPreContext: string[] = [];    // context before first change
-	let hunkPostContext: string[] = [];   // context after last change
-	let seenChanges = false;
-
-	function flushHunk() {
-		if (hunkChangeLines.length === 0 && hunkPreContext.length === 0) return;
-		if (hunkPreContext.length > maxContextPerSide) {
-			result.push(`  ... (${hunkPreContext.length - maxContextPerSide} context lines)`);
-			hunkPreContext = hunkPreContext.slice(-maxContextPerSide);
-		}
-		for (const l of hunkPreContext) result.push(`  ${l}`);
-		for (const l of hunkChangeLines) result.push(`  ${l}`);
-		const postShow = hunkPostContext.slice(0, maxContextPerSide);
-		for (const l of postShow) result.push(`  ${l}`);
-		if (hunkPostContext.length > maxContextPerSide) {
-			result.push(`  ... (${hunkPostContext.length - maxContextPerSide} context lines)`);
-		}
-		hunkChangeLines = [];
-		hunkPreContext = [];
-		hunkPostContext = [];
-		seenChanges = false;
-	}
-	for (const line of lines) {
-		// New file
-		if (line.startsWith("diff --git")) {
-			flushHunk();
-			if (currentFile && (added > 0 || removed > 0)) {
-				result.push(`  +${added} -${removed}`);
-			}
-			const match = line.match(/diff --git a\/(.+) b\/(.+)/);
-			currentFile = match ? match[2] : "unknown";
-			result.push(`\n📄 ${currentFile}`);
-			added = 0;
-			removed = 0;
-			inHunk = false;
-			continue;
-		}
-		// Hunk header
-		if (line.startsWith("@@")) {
-			flushHunk();
-			inHunk = true;
-			const hunkInfo = line.match(/@@ .+ @@/)?.[0] || "@@";
-			result.push(`  ${hunkInfo}`);
-			continue;
-		}
-		// A no-newline marker is metadata both inside and outside a hunk.
-		if (line === "\\ No newline at end of file") {
-			continue;
-		}
-
-		// File headers are metadata only before hunk parsing starts. Inside a
-		// hunk, ---... and +++... are valid change records whose content starts
-		// with -- or ++.
-		if (!inHunk && (line.startsWith("--- ") || line.startsWith("+++ "))) {
-			continue;
-		}
-		// Hunk content
-		if (inHunk) {
-			if (line.startsWith("+") || line.startsWith("-")) {
-				if (line.startsWith("+")) added++;
-				else removed++;
-				// If we had post-context and hit more changes, that context
-				// is interstitial — add it inline
-				if (hunkPostContext.length > 0) {
-					for (const c of hunkPostContext) hunkChangeLines.push(c);
-					hunkPostContext = [];
-				}
-				hunkChangeLines.push(line);
-				seenChanges = true;
-			} else {
-				// Context line
-				if (seenChanges) {
-					hunkPostContext.push(line);
-				} else {
-					hunkPreContext.push(line);
-				}
-			}
-		}
-	}
-
-	flushHunk();
-	// Flush last file stats
-	if (currentFile && (added > 0 || removed > 0)) {
-		result.push(`  +${added} -${removed}`);
-	}
-
-	// Apply maxLines cap
-	if (result.length <= maxLines) {
-		return result.join("\n");
-	}
-
-	// Identify change lines vs structural lines in the output
-	const changeLineIndices: number[] = [];
-	for (let i = 0; i < result.length; i++) {
-		const trimmed = result[i].trimStart();
-		if (trimmed.startsWith("+") || trimmed.startsWith("-")) {
-			// But not file stats like "+5 -3"
-			if (!trimmed.match(/^\+\d+ -\d+$/)) {
-				changeLineIndices.push(i);
-			}
-		}
-	}
-
-	// How many change lines must we cut to fit under maxLines?
-	const overBudget = result.length - maxLines;
-	if (overBudget <= 0 || changeLineIndices.length <= overBudget) {
-		// Fallback: simple first/last truncation
-		const halfBudget = Math.floor((maxLines - 1) / 2);
-		const head = result.slice(0, halfBudget);
-		const tail = result.slice(result.length - halfBudget);
-		const omitted = result.length - halfBudget * 2;
-		return [...head, `  ... +${omitted} more changes`, ...tail].join("\n");
-	}
-
-	// Remove middle change lines, keep first N and last N change lines
-	const keepCount = changeLineIndices.length - overBudget;
-	const keepFirst = Math.ceil(keepCount / 2);
-	const keepLast = keepCount - keepFirst;
-	const cutStart = changeLineIndices[keepFirst];
-	const cutEnd = changeLineIndices[changeLineIndices.length - keepLast - 1];
-	const omitted = cutEnd - cutStart + 1;
-
-	const head = result.slice(0, cutStart);
-	const tail = result.slice(cutEnd + 1);
-	return [...head, `  ... +${omitted} more changes`, ...tail].join("\n");
 }
 
 interface StatusStats {
@@ -307,10 +172,6 @@ export function compactGitOutput(
 	}
 
 	const cmdLower = command.toLowerCase();
-
-	if (cmdLower.startsWith("git diff")) {
-		return compactDiff(output);
-	}
 
 	if (cmdLower.startsWith("git status")) {
 		const compacted = compactStatus(output);
