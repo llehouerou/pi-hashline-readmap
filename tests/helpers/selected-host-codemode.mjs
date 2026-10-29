@@ -56,6 +56,8 @@ try {
       execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.test",
         "commit", "-qm", "subject " + i, "-m", "detail ".repeat(80)], { cwd });
     }
+    // Enough untracked files for `git status --short -b` output that RTK compacts with a notice (> 2000 bytes).
+    for (let i = 0; i < 100; i++) writeFileSync(join(cwd, `untracked-file-with-a-deliberately-long-name-${i}.txt`), String(i));
   }
   // Load the checkout's source explicitly: a repo dist/ (npm ci runs prepare) must not be tested instead.
   const loaded = await discoverAndLoadExtensions([resolve(process.cwd(), "index.ts")], cwd, agentDir);
@@ -159,7 +161,7 @@ try {
           }
         }
         const override = await runner.emitToolResult({ type: "tool_result", toolName: name, toolCallId: id, input: args, ...result, isError, ...parent });
-        if (name === "bash" && args.command === "git log -5") {
+        if (name === "bash" && args.command === "git status --short -b") {
           assert.equal(override.structuredContent, result.structuredContent, "Bash raw object must survive hook by identity");
           assert.ok(override.content.some((c) => c.type === "text" && c.text.includes("[RTK:")));
           if (nested && directBashRaw !== undefined) {
@@ -185,7 +187,7 @@ try {
   }
   let directBashChecked = false;
   if (process.env.PI_CODEMODE_BASH === "1") {
-    const direct = await invoke("bash", { command: "git log -5" }, false);
+    const direct = await invoke("bash", { command: "git status --short -b" }, false);
     assert.equal(direct.isError, false, "direct Bash succeeded");
     assert.ok(direct.result.content.some(item => item.type === "text" && item.text.includes("[RTK:")),
       "direct Bash presentation must be filtered");

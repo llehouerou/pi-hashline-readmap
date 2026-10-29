@@ -68,9 +68,8 @@ function hookHarness() {
       content: [{ type: "text", text }], structuredContent, details: {}, isError }, { cwd: process.cwd() });
   return { tools, emit };
 }
-function rawLog() {
-  const output = Array.from({ length: 5 }, (_, i) =>
-    "commit " + String(i).repeat(40) + "\nAuthor: Example <example@example.test>\nDate: Mon Jan 1 00:00:00 2024 +0000\n\n    subject " + i + "\n\n    " + "detail ".repeat(50) + "\n").join("\n");
+function rawStatus() {
+  const output = ["## main", ...Array.from({ length: 100 }, (_, i) => `?? untracked-file-with-a-deliberately-long-name-${i}.txt`)].join("\n");
   return { output, truncated: true, full_output_path: "/tmp/native-full-output", exit_code: 0, wall_time_seconds: 0.01 };
 }
 
@@ -84,8 +83,8 @@ it("advertises native raw Bash values explicitly", () => {
 
 it.each([false, true])("compresses presentation while preserving raw identity (nested=%s)", async nested => {
   const { emit } = hookHarness();
-  const raw = rawLog();
-  const changed = await emit("git log -5", raw, raw.output, nested);
+  const raw = rawStatus();
+  const changed = await emit("git status --short -b", raw, raw.output, nested);
   expect(changed.structuredContent).toBe(raw);
   expect(changed.structuredContent.output).toBe(raw.output);
   expect(changed.content[0].text).toContain("[RTK:");
@@ -96,8 +95,8 @@ it.each([false, true])("compresses presentation while preserving raw identity (n
 
 it.each([false, true])("bypasses RTK without replacing raw data (nested=%s)", async nested => {
   const { emit } = hookHarness();
-  const raw = rawLog();
-  const bypass = await emit("PI_RTK_BYPASS=1 git log -5", raw, raw.output, nested);
+  const raw = rawStatus();
+  const bypass = await emit("PI_RTK_BYPASS=1 git status --short -b", raw, raw.output, nested);
   expect(bypass.structuredContent).toBe(raw);
   expect(bypass.content[0].text).not.toContain("[RTK:");
 });

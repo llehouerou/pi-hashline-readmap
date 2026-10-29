@@ -19,7 +19,7 @@ The extension routes common command output through specialized compressors, incl
 
 - test runners
 - build and compiler output
-- Git output
+- `git status` (`git diff`, `git show` and `git log` pass through untouched)
 - linters
 - Docker output
 - package-manager output
@@ -36,7 +36,7 @@ Prefix a command with `PI_RTK_BYPASS=1` to skip route-specific compression for t
 
 ```bash
 PI_RTK_BYPASS=1 npm test
-PI_RTK_BYPASS=1 git log --stat
+PI_RTK_BYPASS=1 git status --short
 ```
 
 Bypass behavior:

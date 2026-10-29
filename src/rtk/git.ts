@@ -1,6 +1,6 @@
-// git diff and git show pass through untouched: reviews need the whole diff, and the
+// git diff, show and log pass through untouched: reviews need the whole output, and the
 // bash context guard already offloads oversized output to a file.
-const GIT_COMMANDS = ["git status", "git log"];
+const GIT_COMMANDS = ["git status"];
 
 export function isGitCommand(command: string | undefined | null): boolean {
 	if (typeof command !== "string" || command.length === 0) {
@@ -144,25 +144,6 @@ export function compactStatus(output: string): string {
 	return result.trim();
 }
 
-export function compactLog(output: string, limit: number = 20): string {
-	const lines = output.split("\n");
-	const result: string[] = [];
-
-	for (const line of lines.slice(0, limit)) {
-		if (line.length > 80) {
-			result.push(line.slice(0, 77) + "...");
-		} else {
-			result.push(line);
-		}
-	}
-
-	if (lines.length > limit) {
-		result.push(`... and ${lines.length - limit} more commits`);
-	}
-
-	return result.join("\n");
-}
-
 export function compactGitOutput(
 	output: string,
 	command: string | undefined | null
@@ -176,10 +157,6 @@ export function compactGitOutput(
 	if (cmdLower.startsWith("git status")) {
 		const compacted = compactStatus(output);
 		return compacted === output ? null : compacted;
-	}
-
-	if (cmdLower.startsWith("git log")) {
-		return compactLog(output);
 	}
 
 	return null;
