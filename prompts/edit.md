@@ -101,6 +101,7 @@ When your own edit changes a file's line count, the result warns `Line numbers s
 - Payload indentation is literal. Literal `replace` payloads also preserve their requested line breaks; row-based variants use the separator policy above. A replacement that repeats the untouched row just above or below its range duplicates that row (with a warning); an `insert_after` payload beginning with a copy of its anchor row has that copy dropped (with a warning).
 - A `replace`-only success may include a reminder to prefer anchored edits next time.
 - Edits are written atomically (temp file + rename); symlinks are written through to their real target and preserved, and hard links are updated in place.
+- A `*.go` file is formatted with `gofmt` before it is written when `gofmt` is on `PATH`; the diff and later anchors describe the formatted file. If `gofmt` rejects the result (a syntax error), the edit is written unformatted and `gofmt`'s error is added to the warnings.
 
 Syntax validation runs before writing when supported:
 - Supported: Rust, C++, C headers, Java.

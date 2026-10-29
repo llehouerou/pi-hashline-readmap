@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { resolveToCwd } from "./path-utils.js";
 import { resolveMutationTargetPath, writeFileAtomically } from "./fs-write.js";
+import { formatGofmtError, gofmtGoSource } from "./gofmt.js";
 import { ensureHashInit, formatHashlineDisplay, splitDisplayLines } from "./hashline.js";
 import { buildPtcError, buildPtcLine, buildPtcWarning, type PtcLine, type PtcWarning } from "./ptc-value.js";
 import { packageFileUrl } from "./package-root.js";
@@ -200,7 +201,7 @@ export async function executeWrite(opts: {
 }): Promise<WriteResult> {
   await ensureHashInit();
 
-  const { path: filePath, content, map: requestMap, cwd } = opts;
+  const { path: filePath, content: requestedContent, map: requestMap, cwd } = opts;
   const warnings: string[] = [];
   const ptcWarnings: PtcWarning[] = [];
   const contextHygiene = buildContextHygieneMetadata({
@@ -209,7 +210,7 @@ export async function executeWrite(opts: {
     resources: [buildFileResource(filePath)],
   });
 
-  if (hasBareCarriageReturn(content)) {
+  if (hasBareCarriageReturn(requestedContent)) {
     const message = "File content contains bare CR (\\r) line endings; write refuses to emit anchors that read/edit would normalize differently.";
     warnings.push(message);
     ptcWarnings.push(buildPtcWarning("bare-cr", message));
@@ -225,6 +226,9 @@ export async function executeWrite(opts: {
       contextHygiene,
     };
   }
+  // Go files are written gofmt-formatted, so the returned anchors describe the file on disk.
+  const gofmt = gofmtGoSource(filePath, requestedContent);
+  const content = gofmt.formatted ?? requestedContent;
   const previousContent = readPreviousTextForDiff(filePath);
   const existedBeforeWrite = existsSync(filePath);
 
@@ -281,6 +285,11 @@ export async function executeWrite(opts: {
     const omittedMessage = `Anchors omitted: ${rawLines.length} lines exceed the write anchor budget (${MAX_LINES} lines / ${MAX_BYTES / 1024} KB); use read with offset/limit for anchors.`;
     warnings.push(omittedMessage);
     ptcWarnings.push(buildPtcWarning("anchors-omitted", omittedMessage));
+  }
+  if (gofmt.error) {
+    text += `\n\n${formatGofmtError(gofmt.error)}`;
+    warnings.push(`gofmt failed: ${gofmt.error}`);
+    ptcWarnings.push(buildPtcWarning("gofmt-failed", gofmt.error));
   }
 
   // Optional structural map
