@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerBashRendererTool } from "../src/bash-renderer.js";
 import init from "../index.js";
-import { gitLog } from "./helpers/git-log-fixture.js";
 
 function capturePi() {
   let registered: any;
@@ -69,8 +68,8 @@ function hookHarness() {
       content: [{ type: "text", text }], structuredContent, details: {}, isError }, { cwd: process.cwd() });
   return { tools, emit };
 }
-function rawLog() {
-  const output = gitLog(25);
+function rawStatus() {
+  const output = ["## main", ...Array.from({ length: 100 }, (_, i) => `?? untracked-file-with-a-deliberately-long-name-${i}.txt`)].join("\n");
   return { output, truncated: true, full_output_path: "/tmp/native-full-output", exit_code: 0, wall_time_seconds: 0.01 };
 }
 
@@ -84,8 +83,8 @@ it("advertises native raw Bash values explicitly", () => {
 
 it.each([false, true])("compresses presentation while preserving raw identity (nested=%s)", async nested => {
   const { emit } = hookHarness();
-  const raw = rawLog();
-  const changed = await emit("git log -25", raw, raw.output, nested);
+  const raw = rawStatus();
+  const changed = await emit("git status --short -b", raw, raw.output, nested);
   expect(changed.structuredContent).toBe(raw);
   expect(changed.structuredContent.output).toBe(raw.output);
   expect(changed.content[0].text).toContain("[RTK:");
@@ -96,8 +95,8 @@ it.each([false, true])("compresses presentation while preserving raw identity (n
 
 it.each([false, true])("bypasses RTK without replacing raw data (nested=%s)", async nested => {
   const { emit } = hookHarness();
-  const raw = rawLog();
-  const bypass = await emit("PI_RTK_BYPASS=1 git log -25", raw, raw.output, nested);
+  const raw = rawStatus();
+  const bypass = await emit("PI_RTK_BYPASS=1 git status --short -b", raw, raw.output, nested);
   expect(bypass.structuredContent).toBe(raw);
   expect(bypass.content[0].text).not.toContain("[RTK:");
 });

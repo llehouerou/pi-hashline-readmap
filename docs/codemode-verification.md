@@ -80,14 +80,14 @@ Pi 1.1.0+ `image()` output reports a saved image path. Record that exact path an
 ## Raw Bash contract
 
 ~~~js
-const raw = await tools.bash({command:"git log -5"});
-const bypass = await tools.bash({command:"PI_RTK_BYPASS=1 git log -5"});
+const raw = await tools.bash({command:"git status --short -b"});
+const bypass = await tools.bash({command:"PI_RTK_BYPASS=1 git status --short -b"});
 text({sameRaw:raw.output===bypass.output, hasRtk:raw.output.includes("[RTK:"),
   exit:raw.exit_code, nativeTruncated:raw.truncated});
 text(await tools.bash({command:"printf 'live-264\\n'; exit 7"}));
 ~~~
 
-Also issue `git log -5` as a direct Bash tool call. Expected: direct model presentation may carry an RTK notice; script output is native raw output; bypass does not destructively replace it; exit code 7 remains a native value.
+Also issue `git status --short -b` as a direct Bash tool call in a repository with several untracked files. Expected: direct model presentation may carry an RTK notice; script output is native raw output; bypass does not destructively replace it; exit code 7 remains a native value.
 
 Permission blocking and cancellation are verified with deterministic selected-host fixtures in the automated lane. Record those test results distinctly from this fresh live check; do not issue a destructive permission probe or kill arbitrary live work to imitate the fixture. The fixture's native nested validation/hooks/signal boundary does not establish every AgentSession or user-approval lifecycle branch.
 

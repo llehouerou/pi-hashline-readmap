@@ -1,8 +1,8 @@
-import { dropMarker, outputLines, type Drop } from "./drops.ts";
+import { dropMarker, type Drop } from "./drops.ts";
 
-// git diff and git show pass through untouched: reviews need the whole diff, and the
+// git diff, show and log pass through untouched: reviews need the whole output, and the
 // bash context guard already offloads oversized output to a file.
-const GIT_COMMANDS = ["git status", "git log"];
+const GIT_COMMANDS = ["git status"];
 
 export function isGitCommand(command: string | undefined | null): boolean {
 	if (typeof command !== "string" || command.length === 0) {
@@ -101,27 +101,6 @@ export function compactStatus(output: string, drops: Drop[] = []): string {
 	return result.trim();
 }
 
-// `commit [<>=+-] <sha>` at column 0, or `commit <sha>` after a `--graph` prefix ending in the commit's node (`*`, `<`,
-// `>`, `o`); git abbreviates a sha to no fewer than 4 digits. A body line puts 4 or more spaces before its text
-// (`    commit 1234567`, `|     * commit 1234567`), so the graph before a node may hold no run of 4 spaces.
-// shortcut: a graph with two adjacent blank columns before a node reads as a body line, upgrade if such a graph turns up.
-const LOG_COMMIT_HEADER = /^(?:(?:[|/\\]| (?! {3}))*[*<>o][-.|/\\ ]*)?commit (?:[<>=+-] )?[0-9a-f]{4,64}\b/;
-
-/** Keeps the first `limit` whole commits, or `limit` lines of output with no commit header (`--oneline`, `--format`). */
-export function compactLog(output: string, limit: number = 20, drops: Drop[] = []): string {
-	const lines = outputLines(output);
-	const headers = lines.flatMap((line, i) => (LOG_COMMIT_HEADER.test(line) ? [i] : []));
-	if (headers.length > 0) {
-		if (headers.length <= limit) return output;
-		const marker = dropMarker(drops, headers.length - limit, "commits", `... and ${headers.length - limit} more commits`);
-		return [...lines.slice(0, headers[limit]), marker].join("\n");
-	}
-
-	if (lines.length <= limit) return output;
-	const marker = dropMarker(drops, lines.length - limit, "lines", `... and ${lines.length - limit} more lines`);
-	return [...lines.slice(0, limit), marker].join("\n");
-}
-
 export function compactGitOutput(
 	output: string,
 	command: string | undefined | null,
@@ -136,10 +115,6 @@ export function compactGitOutput(
 	if (cmdLower.startsWith("git status")) {
 		const compacted = compactStatus(output, drops);
 		return compacted === output ? null : compacted;
-	}
-
-	if (cmdLower.startsWith("git log")) {
-		return compactLog(output, undefined, drops);
 	}
 
 	return null;
