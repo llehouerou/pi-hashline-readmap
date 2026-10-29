@@ -92,7 +92,7 @@ describe("buildReadOutput metadata", () => {
     const filePath = resolve(fixturesDir, "large.ts");
     const spy = vi.spyOn(readOutputModule, "buildReadOutput");
 
-    const result = await callReadTool({ path: filePath });
+    const result = await callReadTool({ path: filePath, limit: 100000 });
 
     const lastInput = spy.mock.calls.at(-1)?.[0];
     const built = spy.mock.results.at(-1)?.value;
@@ -103,7 +103,6 @@ describe("buildReadOutput metadata", () => {
       totalBytes: result.details.truncation.totalBytes,
     });
     expect(built.text.includes("[Output truncated:")).toBe(true);
-    expect(built.text).toContain("File Map:");
     expect(getTextContent(result)).toBe(built.text);
     expect(result.details?.ptcValue).toEqual(built.ptcValue);
   });

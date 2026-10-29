@@ -67,7 +67,7 @@ describe("read numeric-string coercion", () => {
     const tool = captureReadTool();
     const truncated = await tool.execute(
       "read-large",
-      { path: resolve(fixturesDir, "large.ts") },
+      { path: resolve(fixturesDir, "large.ts"), limit: "100000" },
       new AbortController().signal,
       () => {},
       { cwd: process.cwd() },

@@ -69,6 +69,8 @@ export interface ReadOutputInput {
    */
   truncation?: ReadTruncationMetadata | null;
   continuation?: ReadContinuationMetadata | null;
+  /** A large unranged read served as its first window plus the map. */
+  mapFirst?: boolean;
   symbol?: ReadSymbolMetadata | null;
   map?: ReadMapMetadata;
   bundle?: ReadBundleMetadata | null;
@@ -169,7 +171,11 @@ export function buildReadOutput(
       text += `\n\n[Output truncated: showing ${truncation.outputLines} of ${input.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Use offset=${input.startLine + truncation.outputLines} to continue.]`;
     }
   } else if (input.continuation) {
-    if (input.symbol && input.continuation.limit !== undefined) {
+    if (input.mapFirst) {
+      const window = input.endLine - input.startLine + 1;
+      const symbolHint = input.map?.appended ? `, or one symbol from the map below with read({ path: ${JSON.stringify(input.path)}, symbol: "name" })` : "";
+      text += `\n\n[Large file: showing lines ${input.startLine}-${input.endLine} of ${input.totalLines}. Read more with read({ path: ${JSON.stringify(input.path)}, offset: ${input.continuation.nextOffset}, limit: ${window} })${symbolHint}.]`;
+    } else if (input.symbol && input.continuation.limit !== undefined) {
       text += `\n\n[Showing lines ${input.startLine}-${input.endLine} of symbol '${input.symbol.name}'. Continue with read({ path: ${JSON.stringify(input.path)}, offset: ${input.continuation.nextOffset}, limit: ${input.continuation.limit} }).]`;
     } else {
       text += `\n\n[Showing lines ${input.startLine}-${input.endLine} of ${input.totalLines}. Use offset=${input.continuation.nextOffset} to continue.]`;

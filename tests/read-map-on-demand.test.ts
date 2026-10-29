@@ -76,15 +76,14 @@ describe("read map on demand", () => {
 		expect(text).toContain("UserRecord");
 	});
 
-	it("map: true on a truncated file still appends the structural map exactly once", async () => {
+	it("map: true on a large file appends the structural map exactly once", async () => {
 		const result = await callReadTool({
 			path: resolve(fixturesDir, "large.ts"),
 			map: true,
 		});
 		const text = result.content[0].text;
-		// File is large enough to be truncated
-		expect(text).toContain("[Output truncated:");
-		// Map still appended even when truncated
+		// File is large enough to be served map-first
+		expect(text).toContain("[Large file: showing lines 1-");
 		expect(text).toContain("File Map:");
 		// Map appears exactly once (no double-append)
 		expect(text.match(/File Map:/g)?.length).toBe(1);

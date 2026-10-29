@@ -141,6 +141,23 @@ const READ_PARAMETERS = Type.Object({
 	),
 });
 
+// An unranged read of a file above either limit is served map-first.
+const MAP_FIRST_MIN_LINES = 400;
+const MAP_FIRST_MIN_CHARS = 15_000;
+const MAP_FIRST_WINDOW_LINES = 200;
+const MAP_FIRST_WINDOW_CHARS = 10_000;
+
+/** End index (exclusive) of the first window of a map-first read: at least one line. */
+function mapFirstWindowEnd(lines: string[]): number {
+	let chars = 0;
+	let end = 0;
+	while (end < lines.length && end < MAP_FIRST_WINDOW_LINES) {
+		chars += lines[end].length + 1;
+		if (end > 0 && chars > MAP_FIRST_WINDOW_CHARS) break;
+		end++;
+	}
+	return end;
+}
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 function startsWithBytes(buffer: Buffer, bytes: number[]): boolean {
@@ -751,6 +768,10 @@ export function registerReadTool(pi: ExtensionAPI, options: ReadToolOptions = {}
 				}
 			}
 
+			// Map-first: a large file read without any range serves its map and a first window, not the whole file.
+			const mapFirst = p.offset === undefined && p.limit === undefined && !p.symbol
+				&& (total > MAP_FIRST_MIN_LINES || normalized.length > MAP_FIRST_MIN_CHARS);
+			if (mapFirst) endIdx = mapFirstWindowEnd(allLines);
 			const selected = allLines.slice(startLine - 1, endIdx);
 			const sourceOutput = buildReadSourceOutput({
 				startLine,
@@ -762,6 +783,7 @@ export function registerReadTool(pi: ExtensionAPI, options: ReadToolOptions = {}
 			// Append structural map: on-demand or automatic for an actually truncated full-file read.
 			const shouldAppendMap =
 				!!p.map ||
+				mapFirst ||
 				(!!truncation && !p.offset && !symbolMatch && (!p.limit || !!p.symbol));
 			let appendedMap = false;
 			let mapText: string | null = null;
@@ -803,6 +825,7 @@ export function registerReadTool(pi: ExtensionAPI, options: ReadToolOptions = {}
 					totalLines: total,
 					selectedLines: selected,
 					warnings: structuredWarnings,
+					mapFirst,
 					// Deprecated compatibility projection; sourceOutput remains authoritative.
 					truncation,
 					continuation: symbolContinuation ?? (

@@ -149,7 +149,7 @@ Rust, C++, C headers, and Java can run parser-error validation before writing. `
 
 ## Composed symbol reads
 
-A symbol may combine with `limit`, `map: true`, and `bundle: "local"`; `symbol+offset` and bundle without `symbol` are invalid. Bundled output is ordered as requested symbol, local support, then full-file map. Truncated full-file text reads append a structural map automatically when available.
+A symbol may combine with `limit`, `map: true`, and `bundle: "local"`; `symbol+offset` and bundle without `symbol` are invalid. Bundled output is ordered as requested symbol, local support, then full-file map. A read with no `offset`, `limit`, or `symbol` of a file over 400 lines or 15,000 characters is served map-first: `range` and `lines` cover only the first window, `continuation.nextOffset` points past it, and `map.appended` is true when a structural map is available.
 
 On supported files, direct symbol reads can target functions, classes, methods, interfaces, type aliases, constants, and enums. Symbol composition rules are unchanged.
 

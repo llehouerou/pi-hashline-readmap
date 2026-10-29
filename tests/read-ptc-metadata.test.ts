@@ -28,16 +28,20 @@ function makeBareCrFixture(): string {
 }
 
 describe("read ptcValue — metadata cases", () => {
-  it("captures truncation and auto-appended map metadata for large reads", async () => {
+  it("captures map-first window and map metadata for large unranged reads", async () => {
     const filePath = resolve(fixturesDir, "large.ts");
     const result = await callReadTool({ path: filePath });
     const ptc = result.details?.ptcValue;
     const text = getTextContent(result);
 
     expect(ptc).toBeDefined();
-    expect(ptc.truncation).not.toBeNull();
+    expect(ptc.truncation).toBeNull();
     expect(ptc.map).toEqual({ requested: false, appended: true });
-    expect(text).toContain("[Output truncated:");
+    expect(ptc.range.startLine).toBe(1);
+    expect(ptc.range.endLine).toBeLessThan(ptc.range.totalLines);
+    expect(ptc.lines).toHaveLength(ptc.range.endLine);
+    expect(ptc.continuation).toEqual({ nextOffset: ptc.range.endLine + 1 });
+    expect(text).toContain("[Large file: showing lines 1-");
     expect(text).toContain("File Map:");
   });
 
