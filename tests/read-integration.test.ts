@@ -63,12 +63,13 @@ describe("read integration — combined output", () => {
 		expect(text).not.toContain("[Output truncated:");
 	});
 
-	it("large TypeScript file returns hashlines and appended map", async () => {
+	it("large TypeScript file returns its first window and the map", async () => {
 		const result = await callReadTool({ path: resolve(fixturesDir, "large.ts") });
 		const text = getTextContent(result);
 
 		expect(text).toMatch(/^\d+:[0-9a-f]{3}\|/m);
-		expect(text).toContain("[Output truncated:");
+		expect(text).toMatch(/\[Large file: showing lines 1-\d+ of \d+\. Read more with read\(\{ path: .*, offset: \d+, limit: \d+ \}\), or one symbol from the map below/);
+		expect(text).not.toContain("[Output truncated:");
 		expect(text).toContain("File Map:");
 		expect(text).toContain("EventEmitter");
 		expect(text).toContain("parseConfig");

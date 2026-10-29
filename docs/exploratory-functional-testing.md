@@ -58,7 +58,7 @@ Expected behavior:
 
 - returns `LINE:HASH|content` hashlines for text files
 - supports targeted reads via `offset` and `limit`
-- appends a structural map automatically when a file is truncated
+- serves a large file read without a range as its first window plus its structural map
 - supports `map: true` to request a structural map explicitly
 - supports `symbol` lookup for mapped file types
 - supports `bundle: "local"` for same-file support context around a symbol read

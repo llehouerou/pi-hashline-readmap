@@ -123,6 +123,7 @@ describe("buildReadOutput", () => {
       totalLines: selectedLines.length,
       selectedLines,
       warnings: [],
+      mapFirst: false,
       truncation: null,
       continuation: null,
       symbol: null,

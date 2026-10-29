@@ -44,7 +44,7 @@ const cases: Array<{
   params: Omit<ReadParams, "path">;
   startLine: number;
 }> = [
-  { name: "default full-file read", params: {}, startLine: 1 },
+  // An unranged read of this file is served map-first, so it is no longer a truncated mode.
   { name: "offset read", params: { offset: 51 }, startLine: 51 },
   { name: "limit read", params: { limit: 200 }, startLine: 1 },
   { name: "symbol read", params: { symbol: "HugeBlock" }, startLine: 51 },

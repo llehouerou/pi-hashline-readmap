@@ -31,7 +31,7 @@ describe("README new-user path", () => {
     expect(readme).toContain("git clone https://github.com/coctostan/pi-hashline-readmap.git");
     expect(readme).toContain("docs/exploratory-functional-testing.md");
     expect(readme).toContain("  readmap/                # structural mapping and symbol lookup");
-    expect(readme).toContain("Truncated full-file reads append a map");
+    expect(readme).toContain("returns its first window plus its map");
     expect(readme).toContain("one coordinated extension");
     for (const url of ["https://github.com/nicholasgasior/pi-hashline-edit", "https://github.com/nicholasgasior/pi-read-map", "https://github.com/PurpleMyst/pi-repo-map", "https://github.com/mcowger/pi-rtk"]) expect(readme).toContain(url);
     expect(existsSync("docs/readme-simplification-analysis.md")).toBe(false);
