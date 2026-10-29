@@ -12,6 +12,8 @@ Content containing bare carriage returns (`\r` not paired as `\r\n`) is refused 
 
 Writes are atomic: content is written to a temporary file in the same directory and renamed over the target, so the file is never left partially written. Symlinked targets are written through to their real target (the symlink is preserved). Hard-linked targets (`nlink > 1`) are the exception — they are updated in place to preserve the shared inode and all links, so that case is not temp+rename atomic. Existing files keep their permission mode; new files use the OS/umask default.
 
+A `*.go` file is formatted with `gofmt` before it is written when `gofmt` is on `PATH`, and the returned anchors describe the formatted file. If `gofmt` rejects the content (a syntax error), the content is written as given and `gofmt`'s error is appended to the result with a `gofmt-failed` warning. Without `gofmt` on `PATH` nothing changes.
+
 ## Parameters
 
 - `path` — relative or absolute file path (string).

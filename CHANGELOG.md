@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - RTK passes `git diff` output through untouched (ANSI-stripped) instead of cutting it to 100 lines. The cut dropped the middle of mid-size diffs, which is what a review reads; the bash context guard still offloads output over its size limit to a file. `git show` was already untouched.
 - `read` without `offset`, `limit`, or `symbol` of a file over 400 lines or 15,000 characters returns its first window (up to 200 lines / 10,000 characters) plus its structural map, and says how to fetch the rest with `offset`/`limit` or `symbol`. Whole reads of large files cost the most context for the least use; an explicit `limit` still reads further at once. Smaller files are unchanged.
 
+### Added
+
+- `edit` and `write` format `*.go` files with `gofmt` before writing them when `gofmt` is on `PATH`, so the returned anchors and the file's freshness describe the formatted file. When `gofmt` rejects the content (a syntax error), it is written as given and `gofmt`'s error is appended to the result.
+
 ## [0.16.1] - 2026-10-14
 
 ### Fixed
