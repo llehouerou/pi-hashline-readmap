@@ -22,7 +22,8 @@ async function callRead(path: string) {
   registerReadTool({ registerTool(tool: any) { readTool = tool; } } as any);
   const result = await readTool.execute(
     "repro-232",
-    { path },
+    // An explicit limit keeps this a byte-truncated read instead of a map-first one.
+    { path, limit: 200 },
     new AbortController().signal,
     () => {},
     { cwd: process.cwd() },
@@ -73,7 +74,7 @@ describe("issue 232 — exact single-pass regression", () => {
       footerNextOffset: 90,
       detailsOutputLines: 89,
       ptcOutputLines: 89,
-      map: { requested: false, appended: true },
+      map: { requested: false, appended: false },
     });
 
     expect(result.details.truncation).toMatchObject({

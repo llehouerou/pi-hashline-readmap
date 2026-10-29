@@ -17,10 +17,10 @@ async function callReadTool(params: { path: string; offset?: number; limit?: num
 describe("Task 2: Map integration in read.ts", () => {
 	beforeEach(() => clearMapCache());
 
-	it("truncated file without offset/limit appends structural map", async () => {
+	it("large file without offset/limit is served map-first", async () => {
 		const result = await callReadTool({ path: resolve(fixturesDir, "large.ts") });
 		const text = result.content[0].text;
-		expect(text).toContain("[Output truncated:");
+		expect(text).toContain("[Large file: showing lines 1-");
 		expect(text).toContain("File Map:");
 	});
 });
