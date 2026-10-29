@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { compactDiff } from "../src/rtk/git.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cleanup: string[] = [];
@@ -71,57 +70,20 @@ function bashEvent(id: string, fullOutputPath: string, isError: boolean) {
   };
 }
 
-describe("issue #231: lossless git diff reduction", () => {
-  it("distinguishes true file metadata from ambiguous hunk records", async () => {
+describe("git diff passes through RTK untouched", () => {
+  it("returns the whole ANSI-stripped diff, headers and all", async () => {
     const handleToolResult = await loadToolResultHandler();
     const fullOutputPath = writeFullOutput(ansiDiff);
     const result = await handleToolResult(bashEvent("diff-success", fullOutputPath, false));
-    const text = result.content[0].text;
 
-    expect(text).toContain("---option was here");
-    expect(text).toContain("+++plusplus");
-    expect(text).toContain("+++new front matter");
-    expect(text).toContain("+3 -2");
-    expect(text).toContain("+1 -0");
-    expect(text).not.toContain("--- a/fixture.txt");
-    expect(text).not.toContain("+++ b/fixture.txt");
-    expect(text).not.toContain("--- /dev/null");
-    expect(text).not.toContain("+++ b/new.txt");
-    expect(text).not.toContain("\\ No newline at end of file");
-    expect(text).not.toContain("\x1b");
-    expect(result.details.compressionInfo.technique).toBe("git");
+    expect(result.content[0].text).toBe(plainDiff);
+    expect(result.details.compressionInfo.technique).toBe("none");
     expect(result.details.rtkCompaction).toMatchObject({
-      applied: true,
-      techniques: ["git"],
+      applied: false,
+      techniques: [],
       truncated: false,
     });
-    expect(result.details.ptcValue.rtkCompaction).toEqual(result.details.rtkCompaction);
-    expect(result.details.bashOriginalOutput).toMatchObject({
-      source: "pi-full-output-path",
-      restoredContentForRtk: true,
-      originalPath: fullOutputPath,
-    });
   });
-
-  it("keeps two hunks in one file and accumulates both hunk counts", () => {
-    const multiHunk = [
-      "diff --git a/two.txt b/two.txt",
-      "--- a/two.txt",
-      "+++ b/two.txt",
-      "@@ -1 +1 @@",
-      "-old one",
-      "+new one",
-      "@@ -10 +10 @@",
-      "-old two",
-      "+new two",
-    ].join("\n");
-
-    const result = compactDiff(multiHunk);
-    expect(result).toContain("@@ -1 +1 @@");
-    expect(result).toContain("@@ -10 +10 @@");
-    expect(result).toContain("+2 -2");
-  });
-
   it("keeps isError as an unconditional ANSI-stripped fallback", async () => {
     const handleToolResult = await loadToolResultHandler();
     const result = await handleToolResult(

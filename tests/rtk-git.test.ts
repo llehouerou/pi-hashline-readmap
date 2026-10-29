@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   isGitCommand,
-  compactDiff,
   compactStatus,
   compactLog,
   compactGitOutput,
@@ -12,10 +11,6 @@ import { filterBashOutput } from "../src/rtk/bash-filter.js";
 import { stripAnsi } from "../src/rtk/ansi.js";
 
 describe("isGitCommand", () => {
-  it("matches git diff", () => {
-    expect(isGitCommand("git diff")).toBe(true);
-  });
-
   it("matches git status", () => {
     expect(isGitCommand("git status")).toBe(true);
   });
@@ -24,14 +19,10 @@ describe("isGitCommand", () => {
     expect(isGitCommand("git log --oneline")).toBe(true);
   });
 
-  it("matches git show", () => {
-    expect(isGitCommand("git show HEAD")).toBe(true);
+  it("rejects git diff and git show, which pass through untouched", () => {
+    expect(isGitCommand("git diff")).toBe(false);
+    expect(isGitCommand("git show HEAD")).toBe(false);
   });
-
-  it("matches git stash", () => {
-    expect(isGitCommand("git stash list")).toBe(true);
-  });
-
   it("rejects npm install", () => {
     expect(isGitCommand("npm install")).toBe(false);
   });
@@ -50,82 +41,6 @@ describe("isGitCommand", () => {
 
   it("rejects empty string", () => {
     expect(isGitCommand("")).toBe(false);
-  });
-});
-
-describe("compactDiff", () => {
-  it("preserves diff content with file headers", () => {
-    const output = [
-      "diff --git a/src/foo.ts b/src/foo.ts",
-      "--- a/src/foo.ts",
-      "+++ b/src/foo.ts",
-      "@@ -1,3 +1,3 @@",
-      " line1",
-      "-old line",
-      "+new line",
-      " line3",
-    ].join("\n");
-
-    const result = compactDiff(output);
-    expect(result).toContain("src/foo.ts");
-    expect(result).toContain("+new line");
-    expect(result).toContain("-old line");
-  });
-
-  it("truncates large diffs significantly", () => {
-    const lines: string[] = ["diff --git a/big.ts b/big.ts", "--- a/big.ts", "+++ b/big.ts", "@@ -1,200 +1,200 @@"];
-    for (let i = 0; i < 200; i++) {
-      lines.push(`+added line ${i}`);
-    }
-    const output = lines.join("\n");
-
-    const result = compactDiff(output, 20);
-    const resultLines = result.split("\n");
-    // Should be dramatically smaller than the 200+ input lines
-    expect(resultLines.length).toBeLessThan(30);
-    expect(result).toMatch(/^\.\.\. and \d+ more lines$/m);
-  });
-
-  it("returns output unchanged when under maxLines", () => {
-    const output = [
-      "diff --git a/a.ts b/a.ts",
-      "--- a/a.ts",
-      "+++ b/a.ts",
-      "@@ -1,1 +1,1 @@",
-      "-old",
-      "+new",
-    ].join("\n");
-
-    const result = compactDiff(output, 100);
-    expect(result).toContain("+new");
-    expect(result).toContain("-old");
-  });
-
-  it("keeps a file's rename, mode and binary lines, dropping only index and the ---/+++ headers", () => {
-    const output = [
-      ...["diff --git a/old.ts b/new.ts", "similarity index 100%", "rename from old.ts", "rename to new.ts"],
-      ...["diff --git a/logo.png b/logo.png", "index 1111111..2222222 100644", "Binary files a/logo.png and b/logo.png differ"],
-    ].join("\n");
-    expect(compactDiff(output)).toBe(
-      ["", "📄 new.ts", "  similarity index 100%", "  rename from old.ts", "  rename to new.ts", "", "📄 logo.png", "  Binary files a/logo.png and b/logo.png differ"].join("\n"),
-    );
-  });
-
-  it("drops only git's whole index header, keeping a message line that starts with index", () => {
-    // `git show --format=%B -p`: the message precedes the first file diff, unindented.
-    const message = ["index page rewritten", "index 1111111..2222222 is the range to review", ""];
-    const output = [...message, "diff --git a/a.ts b/a.ts", "index 1111111..2222222 100644", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"];
-    expect(compactDiff(output.join("\n")).split("\n")).toEqual([...message, "", "📄 a.ts", "  @@ -1 +1 @@", "  -a", "  +b", "  +1 -1"]);
-  });
-
-  it("keeps a file header it can't read, such as git's quoted non-ASCII path", () => {
-    const header = 'diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"';
-    expect(compactDiff([header, "@@ -1 +1 @@", "-a", "+b"].join("\n"))).toContain(`📄 ${header}`);
-  });
-  it("passes output with no file diff through, such as --stat", () => {
-    const stat = " src/a.ts | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n";
-    expect(compactDiff(stat)).toBe(stat);
-    expect(compactGitOutput(stat, "git diff --stat")).toBeNull();
   });
 });
 
@@ -318,19 +233,14 @@ describe("compactLog", () => {
 });
 
 describe("compactGitOutput", () => {
-  it("dispatches git diff to compactDiff", () => {
-    const output = [
-      "diff --git a/f.ts b/f.ts",
-      "--- a/f.ts",
-      "+++ b/f.ts",
-      "@@ -1,1 +1,1 @@",
-      "-old",
-      "+new",
-    ].join("\n");
+  it("passes git diff and git show output through untouched", () => {
+    const lines = ["diff --git a/f.ts b/f.ts", "--- a/f.ts", "+++ b/f.ts", "@@ -1,300 +1,300 @@"];
+    for (let i = 0; i < 300; i++) lines.push(`+added line ${i}`);
+    const output = lines.join("\n");
 
-    const result = compactGitOutput(output, "git diff");
-    expect(result).not.toBeNull();
-    expect(result).toContain("f.ts");
+    expect(compactGitOutput(output, "git diff")).toBeNull();
+    expect(compactGitOutput(output, "git diff --cached -- f.ts")).toBeNull();
+    expect(compactGitOutput(output, "git show HEAD")).toBeNull();
   });
 
   it("dispatches git status to compactStatus", () => {
@@ -378,10 +288,5 @@ describe("word diffs pass through", () => {
     expect(result.output).toBe(stripAnsi(output));
     expect(result.compacted).toBe(false);
     expect(result.dropped).toEqual([]);
-  });
-
-  it("still compacts a line diff, whose context the word diff mistook edits for", () => {
-    const lineDiff = [...header, " a", " b", " c", " d", "-x", "+y"].join("\n");
-    expect(filterBashOutput("git diff", lineDiff).dropped).toEqual([{ count: 1, unit: "context lines" }]);
   });
 });

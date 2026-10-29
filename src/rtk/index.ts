@@ -4,7 +4,7 @@ export { truncate, truncateLines } from "./truncate.js";
 export { filterBuildOutput, isBuildCommand } from "./build.js";
 export { aggregateTestOutput, isTestCommand } from "./test-output.js";
 export { aggregateLinterOutput, isLinterCommand } from "./linter.js";
-export { compactDiff, compactStatus, compactLog, compactGitOutput, isGitCommand } from "./git.js";
+export { compactStatus, compactLog, compactGitOutput, isGitCommand } from "./git.js";
 export { isPackageManagerCommand, compressPackageManagerOutput } from "./package-manager.js";
 export { isDockerCommand, compressDockerOutput } from "./docker.js";
 export { isFileListingCommand, compressFileListingOutput } from "./file-listing.js";

@@ -1,7 +1,8 @@
 import { dropMarker, outputLines, type Drop } from "./drops.ts";
-import { commandWords, parseShellCommands } from "../bash-command-state.ts";
 
-const GIT_COMMANDS = ["git diff", "git status", "git log", "git show", "git stash"];
+// git diff and git show pass through untouched: reviews need the whole diff, and the
+// bash context guard already offloads oversized output to a file.
+const GIT_COMMANDS = ["git status", "git log"];
 
 export function isGitCommand(command: string | undefined | null): boolean {
 	if (typeof command !== "string" || command.length === 0) {
@@ -10,160 +11,6 @@ export function isGitCommand(command: string | undefined | null): boolean {
 
 	const cmdLower = command.toLowerCase();
 	return GIT_COMMANDS.some((gc) => cmdLower.startsWith(gc));
-}
-
-// A word diff marks edits inline (`[-a-]{+b+}`, colour, porcelain's `~`), so `compactDiff` would take them for context.
-const WORD_DIFF_OPTION_RE = /^--(?:word-diff|word-diff-regex|color-words)(?:=|$)/;
-
-function isWordDiff(command: string): boolean {
-	const part = parseShellCommands(command, undefined).commands.find((p) => !p.inSubstitution);
-	return commandWords(part?.words ?? []).some((word) => WORD_DIFF_OPTION_RE.test(word));
-}
-
-export function compactDiff(output: string, maxLines: number = 100, drops: Drop[] = []): string {
-	const lines = outputLines(output);
-	// No file diff to compact (`--stat`, `--name-only`, `--cc`): pass it through.
-	if (!lines.some((line) => line.startsWith("diff --git"))) return output;
-	const result: string[] = [];
-	let currentFile = "";
-	let added = 0;
-	let removed = 0;
-	let inHunk = false;
-	const maxContextPerSide = 3;
-	// Per-hunk accumulators
-	let hunkChangeLines: string[] = [];   // +/- lines plus interstitial context
-	let hunkPreContext: string[] = [];    // context before first change
-	let hunkPostContext: string[] = [];   // context after last change
-	let seenChanges = false;
-	// Output index of each context marker → the context lines it cut; the line cap may cut a marker in turn.
-	const contextCuts = new Map<number, number>();
-
-	function flushHunk() {
-		if (hunkChangeLines.length === 0 && hunkPreContext.length === 0) return;
-		if (hunkPreContext.length > maxContextPerSide) {
-			contextCuts.set(result.length, hunkPreContext.length - maxContextPerSide);
-			result.push(`  ... (${hunkPreContext.length - maxContextPerSide} context lines)`);
-			hunkPreContext = hunkPreContext.slice(-maxContextPerSide);
-		}
-		for (const l of hunkPreContext) result.push(`  ${l}`);
-		for (const l of hunkChangeLines) result.push(`  ${l}`);
-		const postShow = hunkPostContext.slice(0, maxContextPerSide);
-		for (const l of postShow) result.push(`  ${l}`);
-		if (hunkPostContext.length > maxContextPerSide) {
-			contextCuts.set(result.length, hunkPostContext.length - maxContextPerSide);
-			result.push(`  ... (${hunkPostContext.length - maxContextPerSide} context lines)`);
-		}
-		hunkChangeLines = [];
-		hunkPreContext = [];
-		hunkPostContext = [];
-		seenChanges = false;
-	}
-	for (const line of lines) {
-		// New file
-		if (line.startsWith("diff --git")) {
-			flushHunk();
-			if (currentFile && (added > 0 || removed > 0)) {
-				result.push(`  +${added} -${removed}`);
-			}
-			const match = line.match(/diff --git a\/(.+) b\/(.+)/);
-			// A header the pattern can't read (git C-quotes paths holding tabs or non-ASCII) is kept as printed.
-			currentFile = match ? match[2] : line;
-			result.push("", `📄 ${currentFile}`);
-			added = 0;
-			removed = 0;
-			inHunk = false;
-			continue;
-		}
-		// Hunk header
-		if (line.startsWith("@@")) {
-			flushHunk();
-			inHunk = true;
-			const hunkInfo = line.match(/@@ .+ @@/)?.[0] || "@@";
-			result.push(`  ${hunkInfo}`);
-			continue;
-		}
-		// A no-newline marker is metadata both inside and outside a hunk.
-		if (line === "\\ No newline at end of file") {
-			continue;
-		}
-
-		// Before a file's first hunk, git's whole `index <hash>..<hash>[ <mode>]` line and the `---`/`+++` file headers are
-		// noise; any other line (a rename, a mode, a binary change, git's own warning) is kept. Inside a hunk, ---... and
-		// +++... are change records.
-		if (!inHunk) {
-			if (!/^(?:index [0-9a-f]+(?:,[0-9a-f]+)*\.\.[0-9a-f]+(?: [0-7]{6})?$|--- |\+\+\+ )/.test(line)) result.push(currentFile ? `  ${line}` : line);
-			continue;
-		}
-		// Hunk content
-		if (line.startsWith("+") || line.startsWith("-")) {
-			if (line.startsWith("+")) added++;
-			else removed++;
-			// If we had post-context and hit more changes, that context
-			// is interstitial — add it inline
-			if (hunkPostContext.length > 0) {
-				for (const c of hunkPostContext) hunkChangeLines.push(c);
-				hunkPostContext = [];
-			}
-			hunkChangeLines.push(line);
-			seenChanges = true;
-		} else if (seenChanges) {
-			hunkPostContext.push(line);
-		} else {
-			hunkPreContext.push(line);
-		}
-	}
-
-	flushHunk();
-	// Flush last file stats
-	if (currentFile && (added > 0 || removed > 0)) {
-		result.push(`  +${added} -${removed}`);
-	}
-
-	const reportContextCuts = (keep: (i: number) => boolean) => {
-		for (const [i, count] of contextCuts) if (keep(i)) drops.push({ count, unit: "context lines" });
-	};
-
-	// Apply maxLines cap
-	if (result.length <= maxLines) {
-		reportContextCuts(() => true);
-		return result.join("\n");
-	}
-
-	// Replaces result[start, end) with the cap's marker; a context marker inside the cut is counted by it, not reported.
-	const cut = (start: number, end: number): string => {
-		reportContextCuts((i) => i < start);
-		const marker = dropMarker(drops, end - start, "lines", `... and ${end - start} more lines`);
-		reportContextCuts((i) => i >= end);
-		return [...result.slice(0, start), marker, ...result.slice(end)].join("\n");
-	};
-
-	// Identify change lines vs structural lines in the output
-	const changeLineIndices: number[] = [];
-	for (let i = 0; i < result.length; i++) {
-		const trimmed = result[i].trimStart();
-		if (trimmed.startsWith("+") || trimmed.startsWith("-")) {
-			// But not file stats like "+5 -3"
-			if (!trimmed.match(/^\+\d+ -\d+$/)) {
-				changeLineIndices.push(i);
-			}
-		}
-	}
-
-	// How many change lines must we cut to fit under maxLines?
-	const overBudget = result.length - maxLines;
-	if (overBudget <= 0 || changeLineIndices.length <= overBudget) {
-		// Fallback: simple first/last truncation
-		const halfBudget = Math.floor((maxLines - 1) / 2);
-		return cut(halfBudget, result.length - halfBudget);
-	}
-
-	// Remove middle change lines, keep first N and last N change lines
-	const keepCount = changeLineIndices.length - overBudget;
-	const keepFirst = Math.ceil(keepCount / 2);
-	const keepLast = keepCount - keepFirst;
-	const cutStart = changeLineIndices[keepFirst];
-	const cutEnd = changeLineIndices[changeLineIndices.length - keepLast - 1];
-	return cut(cutStart, cutEnd + 1);
 }
 
 const SHORT_STATUS_CODES = new Set([" ", "M", "A", "D", "R", "C", "U", "T", "?", "!"]);
@@ -285,12 +132,6 @@ export function compactGitOutput(
 	}
 
 	const cmdLower = command.toLowerCase();
-
-	if (cmdLower.startsWith("git diff")) {
-		if (isWordDiff(command)) return null;
-		const compacted = compactDiff(output, undefined, drops);
-		return compacted === output ? null : compacted;
-	}
 
 	if (cmdLower.startsWith("git status")) {
 		const compacted = compactStatus(output, drops);
