@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - A `bash` anti-pattern hint names only active tools: with `grep` inactive (`--exclude-tools grep`), `rg foo` carries no `Prefer the grep tool` hint, and the same holds for `find`'s file-search hint and the `read` and `edit` hints.
+- `read` without `offset`, `limit`, or `symbol` of a file over 400 lines or 15,000 characters returns its first window (up to 200 lines / 10,000 characters) plus its structural map, and says how to fetch the rest with `offset`/`limit` or `symbol`. Whole reads of large files cost the most context for the least use; an explicit `limit` still reads further at once. Smaller files are unchanged.
+
+### Added
+
+- `edit` and `write` format `*.go` files with `gofmt` before writing them when `gofmt` is on `PATH`, so the returned anchors and the file's freshness describe the formatted file. When `gofmt` rejects the content (a syntax error), it is written as given and `gofmt`'s error is appended to the result.
 
 ## [0.20.0] - 2026-11-04
 
@@ -86,11 +91,6 @@ Anchor freshness now matches what the model sees: the extension's own edits keep
 - `edit` and `write` declare Pi's sequential execution mode, so a turn that contains either runs its calls in call order. A `read` batched after an `edit` of the same file used to run concurrently with it and could show the pre-edit file, so the next anchored edit through it failed. Turns without an `edit` or `write` still run in parallel. Based on #238 by @llehouerou.
 - `bash` commands are checked for file changes in every command of a chain (after `;`, `&&`, `||`, `|`, newlines, keywords such as `if`/`then`, `NAME=value` prefixes, subshells and `$(…)` substitutions), not only in the first word of the line. Heredoc bodies and a quoted `>` no longer count as writes, and `<<<` no longer opens a heredoc. Relative targets resolve against a literal `cd` earlier in the command; after a `cd` it cannot follow, only absolute targets count, and a subshell's `cd` ends at its `)`. A command behind `sudo`, `env`, `command`, `exec` or `xargs` is still not detected. Based on #240 by @llehouerou.
 - A file that a `bash` command changes needs fresh anchors before the next anchored `edit`, even when the command failed or the file is known only from `write` or `edit`. Freshness used to expire only through a stale earlier read, and only after a successful command, so a file known only from `write` or `edit`, or one changed by a failed `cmd > file`, kept accepting its old anchors. Based on #239 by @llehouerou.
-
-### Added
-
-- `edit` and `write` format `*.go` files with `gofmt` before writing them when `gofmt` is on `PATH`, so the returned anchors and the file's freshness describe the formatted file. When `gofmt` rejects the content (a syntax error), it is written as given and `gofmt`'s error is appended to the result.
-
 ## [0.16.1] - 2026-10-14
 
 ### Fixed
