@@ -65,7 +65,7 @@ describe("write TUI renderer", () => {
     expect(createdExpanded).toContain("  2 │ two");
     expect(createdExpanded).toContain("  3 │ three");
     expect(createdExpanded).not.toContain("diff +");
-    expect(createdExpanded).not.toContain("▌+");
+    expect(createdExpanded).not.toContain("1 + ");
     expect(JSON.stringify(created.details)).toBe(before);
 
     // Overwrite: diff UI is preserved — the old vs new comparison still has signal.
@@ -73,12 +73,12 @@ describe("write TUI renderer", () => {
     const overwritten: any = { content: created.content, details: { writeState: "overwritten", diffData: overwrittenDiffData, ptcValue: { tool: "write" } } };
     const overwrittenRendered = textOf(t.renderResult(overwritten, { expanded: true, width: 80 }, theme, { expanded: true, width: 80 }), 80);
     expect(overwrittenRendered.split("\n")[0]).toBe("↳ overwritten");
-    expect(overwrittenRendered).toContain("↳ diff +1 -1 • 1 hunk • 1 file • unified");
-    expect(overwrittenRendered).toContain("▌- 1 │ old");
-    expect(overwrittenRendered).toContain("▌+ 1 │ new");
+    expect(overwrittenRendered).toContain("↳ diff +1 -1 • 1 hunk • unified");
+    expect(overwrittenRendered).toContain("1 - old");
+    expect(overwrittenRendered).toContain("1 + new");
 
     const collapsed: any = { content: created.content, details: { ...created.details, writeState: "overwritten", diffData: overwrittenDiffData } };
-    expect(textOf(t.renderResult(collapsed, {}, theme, {}))).toBe("↳ overwritten • Ctrl+O to expand\n▌- 1 │ old\n▌+ 1 │ new");
+    expect(textOf(t.renderResult(collapsed, {}, theme, {}))).toBe("↳ overwritten • Ctrl+O to expand\n1 - old\n1 + new");
   });
 
   it("wraps the write path title in an OSC 8 hyperlink when supported", () => {
@@ -118,7 +118,7 @@ describe("write TUI renderer", () => {
     expect(rendered).toContain("↳ pending overwrite");
     expect(rendered).toContain("Ctrl+O to expand");
     expect(rendered).not.toContain("↳ diff");
-    expect(rendered).toContain("▌+ 1 │ new");
+    expect(rendered).toContain("1 + new");
   });
 
   it("keeps a collapsed pending create to its summary line", () => {

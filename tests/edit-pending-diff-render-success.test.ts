@@ -115,7 +115,7 @@ describe("edit renderCall pending diff preview", () => {
 		expect(rendered).toContain("pending edit");
 		expect(rendered).toContain("Ctrl+O to expand");
 		expect(rendered).not.toContain("↳ diff");
-		expect(rendered).toContain("▌+ 1 │ const unique = 2;");
+		expect(rendered).toContain("1 + const unique = 2;");
 	});
 
 	it("renders the full diff body when expanded", async () => {
@@ -132,8 +132,8 @@ describe("edit renderCall pending diff preview", () => {
 		const rendered = textOf(second);
 
 		expect(rendered).toContain("pending edit");
-		expect(rendered).toContain("↳ diff +1 -1");
-		expect(rendered).toContain("▌+ 1 │ const unique = 2;");
+		expect(rendered).toContain("↳ diff sample.ts +1 -1");
+		expect(rendered).toContain("1 + const unique = 2;");
 	});
 
 	it("collapses the pending preview to just the call line once execution has started", async () => {
@@ -150,7 +150,7 @@ describe("edit renderCall pending diff preview", () => {
 		const beforeSecond = tool.renderCall(args, theme, { ...before, lastComponent: beforeFirst });
 		const beforeText = textOf(beforeSecond);
 		expect(beforeText).toContain("pending edit");
-		expect(beforeText).toContain("↳ diff +1 -1");
+		expect(beforeText).toContain("↳ diff sample.ts +1 -1");
 
 		// After execution starts: the call row drops the pending preview — renderResult will
 		// carry the post-exec story (↳ edited +N -M with the same expandable diff).
@@ -159,6 +159,6 @@ describe("edit renderCall pending diff preview", () => {
 		expect(afterRendered).toContain("edit");
 		expect(afterRendered).not.toContain("pending");
 		expect(afterRendered).not.toContain("↳ diff +");
-		expect(afterRendered).not.toContain("▌");
+		expect(afterRendered).not.toContain("1 + ");
 	});
 });

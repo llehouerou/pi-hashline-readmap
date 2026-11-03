@@ -49,7 +49,7 @@ describe("DiffPreviewComponent", () => {
 		for (const line of at60) expect(visibleWidth(line)).toBeLessThanOrEqual(60);
 		for (const line of at160) expect(visibleWidth(line)).toBeLessThanOrEqual(160);
 		// At 60 columns we must be in unified mode (>= 50 and < 100) and content wraps.
-		expect(at60.join("\n")).toContain("↳ diff +1 -1 • 1 hunk • 1 file • unified");
+		expect(at60.join("\n")).toContain("↳ diff +1 -1 • 1 hunk • unified");
 		expect(at60.length).toBeGreaterThan(at160.length);
 		// No row should be truncated with an ellipsis when wrap is feasible.
 		expect(at60.some((line) => line.endsWith("..."))).toBe(false);
@@ -65,7 +65,7 @@ describe("DiffPreviewComponent", () => {
 		});
 		const lines = comp.render(120);
 		expect(lines.slice(0, 2)).toEqual(["write sample.txt", "↳ pending overwrite"]);
-		expect(lines[2]).toContain("▌- 1 │ ");
+		expect(lines[2]).toMatch(/^1 - the quick/);
 		expect(lines).toHaveLength(5);
 		expect(lines[4]).toMatch(/^… \(2 more diff lines/);
 		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(120);
@@ -118,7 +118,7 @@ it("refreshes cached collapsed diff hints after a binding change at the same wid
     }
     component.update({ diffData: longDiffData, theme: identityTheme, expanded: true });
     const expanded = component.render(120);
-    assert.ok(expanded.some(line => line.includes("▌-")));
+    assert.ok(expanded.some(line => line.startsWith("1 - ")));
     bindings.setUserBindings({ "app.tools.expand": "ctrl+shift+alt+x" });
     assert.strictEqual(component.render(120), expanded);
   } finally {
@@ -145,7 +145,7 @@ it("renders expanded diffs without initializing the host theme", () => {
       expanded: true,
     });
     const lines = component.render(80);
-    assert.ok(lines.some(line => line.includes("▌-")));
+    assert.ok(lines.some(line => line.startsWith("1 - ")));
     assert.ok(!lines.some(line => line.includes("to expand")));
     assert.strictEqual(component.render(80), lines);
   `;

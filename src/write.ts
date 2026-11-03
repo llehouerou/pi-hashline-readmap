@@ -523,7 +523,7 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
           }
         : pendingWritePreviewParts(text, preview, expanded, theme);
       if (parts.diffData) {
-        const diffOptions = { prefixLines: parts.lines, diffData: parts.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
+        const diffOptions = { prefixLines: parts.lines, diffData: parts.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines(), path, boxBg: "toolPendingBg" as const };
         const diffComponent = context.lastComponent instanceof DiffPreviewComponent
           ? context.lastComponent
           : new DiffPreviewComponent(diffOptions);
@@ -566,7 +566,7 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
       const hasExpandableDiff = !!diffData;
       let text = summaryLine(state, { hidden: hasExpandableDiff && !expanded });
       if (hasExpandableDiff) {
-        const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
+        const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines(), path: context.args?.path };
         const diffComponent = context.lastComponent instanceof DiffPreviewComponent
           ? context.lastComponent
           : new DiffPreviewComponent(diffOptions);
