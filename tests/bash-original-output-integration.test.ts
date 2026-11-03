@@ -23,22 +23,22 @@ async function loadHandlers(tag: string) {
 
 // The close input of slice 10 (Only Pi's metadata names its full output): a command's own
 // `Full output: <temp path>` line, with no Pi truncation behind it.
-function decoyGitLog(dir: string) {
+function decoyCurlBody(dir: string) {
   const decoyPath = join(dir, "decoy.txt");
   writeFileSync(decoyPath, "DECOY CONTENT\n", "utf8");
   const lines = [`a000000 Full output: ${decoyPath}`];
-  for (let i = 1; i < 26; i++) lines.push(`a${String(i).padStart(6, "0")} commit ${i}`);
+  for (let i = 1; i < 206; i++) lines.push(`a${String(i).padStart(6, "0")} line ${i}`);
   return { decoyPath, visible: `${lines.join("\n")}\n` };
 }
 
 async function runDecoy(tag: string, dir: string) {
-  const { decoyPath, visible } = decoyGitLog(dir);
+  const { decoyPath, visible } = decoyCurlBody(dir);
   const handlers = await loadHandlers(tag);
   const result = await handlers["tool_result"]({
     type: "tool_result",
     toolName: "bash",
     toolCallId: `bash-${tag}`,
-    input: { command: "git log --oneline" },
+    input: { command: "curl -s https://example.com" },
     content: [{ type: "text", text: visible }],
     details: undefined,
     isError: false,
@@ -145,7 +145,7 @@ describe("bash original output integration", () => {
     try {
       expect(text).not.toContain("DECOY CONTENT");
       expect(text).toContain(`a000000 Full output: ${decoyPath}`);
-      expect(text).toContain("a000019 commit 19");
+      expect(text).toContain("a000199 line 199");
       expect(result.details.rtkCompaction.dropped).toEqual([{ count: 6, unit: "lines" }]);
       expect(path, text).toBeDefined();
       expect(path).not.toBe(decoyPath);

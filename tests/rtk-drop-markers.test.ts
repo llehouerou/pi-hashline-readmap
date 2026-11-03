@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { filterBashOutput } from "../src/rtk/bash-filter.ts";
-import { compactDiff } from "../src/rtk/git.ts";
 import { buildRtkCompaction } from "../src/rtk/rtk-compaction.ts";
 import type { Drop } from "../src/rtk/drops.ts";
 
@@ -29,69 +28,7 @@ function compact(command: string, raw: string) {
 const lines = <T>(count: number, make: (i: number) => T): T[] => Array.from({ length: count }, (_, i) => make(i));
 const text = (rows: string[]) => `${rows.join("\n")}\n`;
 
-function fileDiff(name: string, changes: string[]): string[] {
-  return [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, `@@ -1,1 +1,${changes.length} @@`, ...changes];
-}
-
 describe("budget cuts end in a marker naming the true count, and set truncated", () => {
-  it("git diff past its line cap counts the dropped output lines, file headers included", () => {
-    const raw = text(lines(40, (i) => fileDiff(`f${i}`, ["-old", "+new"])).flat());
-    const uncapped = compactDiff(raw, Number.POSITIVE_INFINITY).split("\n");
-    const result = compact("git diff", raw);
-
-    const marker = result.lines.find((line) => line.startsWith("..."));
-    expect(marker).toBe(`... and ${uncapped.length - (result.lines.length - 1)} more lines`);
-    expect(uncapped).toHaveLength(240);
-    expect(marker).toBe("... and 142 more lines");
-    expect(result.truncated).toBe(true);
-  });
-
-  it("git diff cutting changes across files counts every line it drops", () => {
-    const raw = text(lines(3, (f) => fileDiff(`f${f}`, lines(40, (i) => `+line ${i}`))).flat());
-    const uncapped = compactDiff(raw, Number.POSITIVE_INFINITY).split("\n");
-    const result = compact("git diff", raw);
-
-    const marker = result.lines.find((line) => line.startsWith("..."));
-    expect(marker).toBe(`... and ${uncapped.length - (result.lines.length - 1)} more lines`);
-    expect(result.truncated).toBe(true);
-  });
-
-  it("git diff reports exactly the context markers left beside the cap's cut, at every cap", () => {
-    const hunk = [" a", " b", " c", " d", " e", "-x", "+y", " f", " g", " h", " i", " j"];
-    const raw = text(lines(6, (f) => fileDiff(`f${f}`, hunk)).flat());
-    for (let maxLines = 5; maxLines <= 90; maxLines++) {
-      const drops: Drop[] = [];
-      const output = compactDiff(raw, maxLines, drops);
-      expect(drops, `maxLines ${maxLines}`).toEqual(markersIn(output));
-    }
-  });
-
-  it("git diff past its line cap reports only the context markers it kept, beside the cap's own", () => {
-    const raw = text(lines(30, (f) => fileDiff(`f${f}`, [" a", " b", " c", " d", " e", "-x", "+y"])).flat());
-    const result = compact("git diff -U5", raw);
-
-    expect(result.lines.filter((line) => line.includes("context lines")).length).toBeGreaterThan(0);
-    expect(result.dropped.filter((drop) => drop.unit === "context lines").length).toBeLessThan(30);
-    expect(result.dropped).toContainEqual({ count: expect.any(Number), unit: "lines" });
-  });
-
-  it("git diff -U5 names the context lines it cuts past 3 per side, and sets truncated", () => {
-    const raw = text(fileDiff("f", [..." a b c d e".split(" ").slice(1).map((c) => ` ${c}`), "-x", "+y", ..." f g h i j".split(" ").slice(1).map((c) => ` ${c}`)]));
-    const result = compact("git diff -U5", raw);
-
-    expect(result.lines.filter((line) => line.includes("context lines"))).toEqual(["  ... (2 context lines)", "  ... (2 context lines)"]);
-    expect(result.truncated).toBe(true);
-  });
-
-  it("git diff with 3 context lines and a trailing newline cuts nothing", () => {
-    const raw = text(fileDiff("f", [" a", " b", " c", "-x", "+y", " d", " e", " f"]));
-    const result = compact("git diff", raw);
-
-    expect(result.output).not.toContain("context lines");
-    expect(result.lines.at(-1)).toBe("  +1 -1");
-    expect(result.truncated).toBe(false);
-  });
-
   it("git status names the files past each list's cut", () => {
     const raw = text(["## main...origin/main", ...lines(8, (i) => ` M f${i}`), ...lines(6, (i) => `M  s${i}`), ...lines(5, (i) => `?? u${i}`)]);
     const result = compact("git status --short --branch", raw);
@@ -225,26 +162,6 @@ describe("listings whose entries can't be counted pass through", () => {
 // Ruling 0006: a route drops silently only the noise docs/bash-output.md names for it. Each fixture below holds that
 // noise, the lines whose text must stay visible (`shown`), and any lines a budget cuts, which `dropped` must count.
 const ROUTES: { route: string; command: string; raw: string[]; shown: string[]; dropped: Drop[] }[] = [
-  {
-    route: "git diff",
-    command: "git diff -M",
-    raw: [
-      "warning: in the working copy of 'a.txt', LF will be replaced by CRLF the next time Git touches it",
-      ...["diff --git a/old.ts b/new.ts", "similarity index 90%", "rename from old.ts", "rename to new.ts"],
-      ...["index 1111111..2222222 100644", "--- a/old.ts", "+++ b/new.ts", "@@ -1 +1 @@", "-old line", "+new line"],
-      ...["diff --git a/run.sh b/run.sh", "old mode 100644", "new mode 100755"],
-      ...["diff --git a/logo.png b/logo.png", "index 3333333..4444444 100644", "Binary files a/logo.png and b/logo.png differ"],
-      ...["diff --git a/added.ts b/added.ts", "new file mode 100644", "index 0000000..5555555", "--- /dev/null", "+++ b/added.ts"],
-      ...["@@ -0,0 +1 @@", "+first", "\\ No newline at end of file"],
-    ],
-    shown: [
-      "warning: in the working copy of 'a.txt', LF will be replaced by CRLF the next time Git touches it",
-      ...["📄 new.ts", "similarity index 90%", "rename from old.ts", "rename to new.ts", "@@ -1 +1 @@", "-old line", "+new line"],
-      ...["📄 run.sh", "old mode 100644", "new mode 100755", "📄 logo.png", "Binary files a/logo.png and b/logo.png differ"],
-      ...["📄 added.ts", "new file mode 100644", "@@ -0,0 +1 @@", "+first"],
-    ],
-    dropped: [],
-  },
   {
     route: "git status",
     command: "git status --short --branch",

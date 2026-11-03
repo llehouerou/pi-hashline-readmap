@@ -144,15 +144,13 @@ describe("details.rtkCompaction — test-output short-circuit", () => {
 describe("details.rtkCompaction — dropped end-to-end", () => {
   it("reports the route's drops as dropped and sets truncated, mirrored at ptcValue", async () => {
     const handler = await loadHandler("dropped");
-    // The dropped 21st line reads like the marker that replaces it.
-    const lines = Array.from({ length: 20 }, (_, i) => `abc${String(i).padStart(4, "0")} subject ${i}`);
-    const rawInput = [...lines, "... and 1 more lines"].join("\n") + "\n";
-    const result = await handler(makeBashEvent("t-dropped", "git log --oneline", rawInput));
+    const rawInput = ["## main", ...Array.from({ length: 6 }, (_, i) => `?? untracked-${i}.txt`)].join("\n") + "\n";
+    const result = await handler(makeBashEvent("t-dropped", "git status --short -b", rawInput));
     expect(result.details.rtkCompaction).toMatchObject({
       applied: true,
       techniques: ["git"],
       truncated: true,
-      dropped: [{ count: 1, unit: "lines" }],
+      dropped: [{ count: 3, unit: "files" }],
     });
     expect(result.details.ptcValue?.rtkCompaction).toEqual(result.details.rtkCompaction);
   });
@@ -161,12 +159,12 @@ describe("details.rtkCompaction — dropped end-to-end", () => {
 describe("RTK notice — Original output names the saved pre-RTK copy", () => {
   it("names a 0600 file holding the pre-RTK output byte for byte, and no Full output:", async () => {
     const handler = await loadHandler("original-output");
-    const lines = Array.from({ length: 21 }, (_, i) => `abc${String(i).padStart(4, "0")} subjéct ${i}`);
+    const lines = ["## main", ...Array.from({ length: 21 }, (_, i) => `?? subjéct-${i}.txt`)];
     const rawInput = lines.join("\n") + "\n";
-    const result = await handler(makeBashEvent("t-original", "git log --oneline", rawInput));
+    const result = await handler(makeBashEvent("t-original", "git status --short -b", rawInput));
     const text: string = result.content[0].text;
     const match = text.match(
-      /^\[RTK: compressed git output .* \(-?\d+% saved\)\. Original output: (\S+)\. Use `PI_RTK_BYPASS=1 git log --oneline` to re-run uncompressed\.\]\n/,
+      /^\[RTK: compressed git output .* \(-?\d+% saved\)\. Original output: (\S+)\. Use `PI_RTK_BYPASS=1 git status --short -b` to re-run uncompressed\.\]\n/,
     );
     expect(match, text).not.toBeNull();
     const path = match![1];
@@ -185,9 +183,9 @@ describe("RTK notice — Original output names the saved pre-RTK copy", () => {
     const saved = process.env.TMPDIR;
     process.env.TMPDIR = "/nonexistent-hashline-tmpdir";
     try {
-      const lines = Array.from({ length: 21 }, (_, i) => `abc${String(i).padStart(4, "0")} subject ${i}`);
+      const lines = ["## main", ...Array.from({ length: 21 }, (_, i) => `?? untracked-${i}.txt`)];
       const rawInput = lines.join("\n");
-      const result = await handler(makeBashEvent("t-original-fail", "git log --oneline", rawInput));
+      const result = await handler(makeBashEvent("t-original-fail", "git status --short -b", rawInput));
       expect(result.content[0].text).toBe(rawInput);
       expect(result.details.rtkCompaction).toMatchObject({ applied: false, dropped: [] });
       expect(result.details.compressionInfo.bypassedBy).toBe("unsaved-original");

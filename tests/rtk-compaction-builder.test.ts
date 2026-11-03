@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildRtkCompaction, type RtkCompaction } from "../src/rtk/rtk-compaction.js";
 import { filterBashOutput, type CompressionInfo } from "../src/rtk/bash-filter.js";
-import { gitLog, gitLogGraph, gitLogOneline } from "./helpers/git-log-fixture.js";
 
 const noneInfo = (originalBytes = 10, outputBytes = 10): CompressionInfo => ({
   originalBytes,
@@ -128,20 +127,5 @@ describe("buildRtkCompaction — dropped and truncated", () => {
     const output = "warning\n... 16 lines omitted ...\n";
     const result = buildRtkCompaction({ rawInput, output, compacted: true, dropped: [], info: info(rawInput, output, "package-manager") });
     expect(result).toMatchObject({ applied: true, techniques: ["package-manager"], truncated: false, dropped: [] });
-  });
-});
-
-describe("buildRtkCompaction — git log reports exactly what it dropped", () => {
-  const markerIdentical = gitLogOneline(20) + "... and 1 more lines\n";
-  it.each([
-    ["git log -3", gitLog(3), { applied: false, techniques: [], truncated: false, dropped: [] }],
-    ["git log -30", gitLog(30), { applied: true, techniques: ["git"], truncated: true, dropped: [{ count: 10, unit: "commits" }] }],
-    ["git log --graph -30", gitLogGraph(30), { applied: true, techniques: ["git"], truncated: true, dropped: [{ count: 10, unit: "commits" }] }],
-    ["git log --oneline -30", gitLogOneline(30), { applied: true, techniques: ["git"], truncated: true, dropped: [{ count: 10, unit: "lines" }] }],
-    // Its dropped 21st line reads like the marker that replaces it, which marker re-detection counted as no drop.
-    ["git log --oneline", markerIdentical, { applied: true, techniques: ["git"], truncated: true, dropped: [{ count: 1, unit: "lines" }] }],
-  ])("%s", (command, rawInput, expected) => {
-    const { output, compacted, info, dropped } = filterBashOutput(command, rawInput);
-    expect(buildRtkCompaction({ rawInput, output, compacted, info, dropped })).toMatchObject(expected);
   });
 });

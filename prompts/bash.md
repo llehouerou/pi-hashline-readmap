@@ -41,8 +41,8 @@ The same value is mirrored at `details.ptcValue.rtkCompaction` (deep-equal).
   Only routed RTK compression techniques can set this field; post-RTK guard
   trimming and test-output ANSI normalization do not.
 - **`dropped`** — one `{ count, unit }` per drop marker in the output, in
-  output order, as the route reported it when it wrote the marker (`... and 3
-  more commits` is `{ count: 3, unit: "commits" }`). A marker-like line the
+  output order, as the route reported it when it wrote the marker (`  ... and 3
+  more files` is `{ count: 3, unit: "files" }`). A marker-like line the
   command printed itself is no drop. Always present; `[]` when nothing was
   dropped.
 - **`originalLineCount` / `compactedLineCount`** — newline-split line counts of
