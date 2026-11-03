@@ -33,8 +33,8 @@ describe("write renderCall pending diff preview", () => {
 		expect(text).toContain("↳ pending overwrite");
 		expect(text).toContain("Ctrl+O to expand");
 		expect(text).not.toContain("↳ diff +1 -1");
-		expect(text).toContain("▌- 1 │ old value");
-		expect(text).toContain("▌+ 1 │ new value");
+		expect(text).toContain("1 - old value");
+		expect(text).toContain("1 + new value");
 	});
 
 	it("renders the full diff body when expanded", () => {
@@ -47,9 +47,9 @@ describe("write renderCall pending diff preview", () => {
 		const text = textOf(rendered);
 
 		expect(text).toContain("↳ pending overwrite");
-		expect(text).toContain("↳ diff +1 -1");
-		expect(text).toContain("▌- 1 │ old value");
-		expect(text).toContain("▌+ 1 │ new value");
+		expect(text).toContain("↳ diff sample.txt +1 -1");
+		expect(text).toContain("1 - old value");
+		expect(text).toContain("1 + new value");
 	});
 
 	it("suppresses the diff body for pending create (pure-add) writes", () => {
@@ -62,7 +62,7 @@ describe("write renderCall pending diff preview", () => {
 		expect(collapsed).toContain("↳ pending create");
 		expect(collapsed).toContain("Ctrl+O to expand");
 		expect(collapsed).not.toContain("↳ diff +");
-		expect(collapsed).not.toContain("▌+");
+		expect(collapsed).not.toContain("1 + ");
 		expect(collapsed).not.toContain("hello");
 
 		// Expanded: the new file's contents are shown indented (no gutter, no line numbers, no colors).
@@ -72,6 +72,6 @@ describe("write renderCall pending diff preview", () => {
 		expect(expanded).toContain("  1 │ hello");
 		expect(expanded).toContain("  2 │ world");
 		expect(expanded).not.toContain("↳ diff +");
-		expect(expanded).not.toContain("▌+");
+		expect(expanded).not.toContain("1 + ");
 	});
 });

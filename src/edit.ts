@@ -1400,7 +1400,7 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 				? { lines: [text, summaryLine("pending edit", { hidden: true })], headerLabel: "pending edit" }
 				: pendingPreviewLines(text, preview, expanded);
 			if (preview2.diffData) {
-				const diffOptions = { prefixLines: preview2.lines, diffData: preview2.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
+				const diffOptions = { prefixLines: preview2.lines, diffData: preview2.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines(), path: args?.path, boxBg: "toolPendingBg" as const };
 				const diffComponent = context.lastComponent instanceof DiffPreviewComponent
 					? context.lastComponent
 					: new DiffPreviewComponent(diffOptions);
@@ -1466,7 +1466,7 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 				if (info.warningsBadge) badges.push(info.warningsBadge);
 				text = summaryLine(badges.join(" • "), { hidden: !!diffData && !expanded });
 				if (diffData) {
-					const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
+					const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines(), path: (context as { args?: { path?: string } }).args?.path };
 					const diffComponent = context.lastComponent instanceof DiffPreviewComponent
 						? context.lastComponent
 						: new DiffPreviewComponent(diffOptions);

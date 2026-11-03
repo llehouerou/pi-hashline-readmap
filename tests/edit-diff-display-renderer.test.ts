@@ -77,7 +77,7 @@ describe("edit final-result renderer with edit.diffDisplay = expanded", () => {
       80,
     );
     expect(rendered).toContain("↳ diff +1 -1");
-    expect(rendered).toContain("▌+ 2 │ TWO");
+    expect(rendered).toContain("2 + TWO");
   });
 });
 describe("edit pending-preview renderer with edit.diffDisplay = expanded", () => {
@@ -153,8 +153,8 @@ describe("edit pending-preview renderer with edit.diffDisplay = expanded", () =>
     expect(invalidate).toHaveBeenCalledTimes(1);
     const rendered = textOf(tool.renderCall(makeArgs("newer"), theme, completeContext));
     expect(rendered).toContain("pending edit");
-    expect(rendered).toContain("↳ diff +1 -1");
-    expect(rendered).toContain("▌+ 1 │ newer");
+    expect(rendered).toMatch(/↳ diff \S+ \+1 -1/);
+    expect(rendered).toContain("1 + newer");
 });
 });
 
@@ -195,7 +195,7 @@ describe("edit renderer default behavior is unchanged with no setting and no env
     // Collapsed: a capped preview under the summary line, without the expanded diff header.
     expect(rendered).toContain("↳ edited +1 -1");
     expect(rendered).not.toContain("↳ diff +1 -1");
-    expect(rendered).toContain("▌+ 2 │ TWO");
+    expect(rendered).toContain("2 + TWO");
   });
 
   it("still expands the final-result diff when context.expanded is true", () => {
@@ -225,6 +225,6 @@ describe("edit renderer default behavior is unchanged with no setting and no env
       80,
     );
     expect(rendered).toContain("↳ diff +1 -1");
-    expect(rendered).toContain("▌+ 2 │ TWO");
+    expect(rendered).toContain("2 + TWO");
   });
 });

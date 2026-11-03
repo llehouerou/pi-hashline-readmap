@@ -34,8 +34,8 @@ describe("edit TUI renderer", () => {
     const before = JSON.stringify(result.details);
     const rendered = textOf(tool().renderResult(result, { expanded: true, width: 80 }, theme, { expanded: true, width: 80 }), 80);
     expect(rendered.split("\n")[0]).toBe("↳ edited +1 -1 • semantic");
-    expect(rendered).toContain("↳ diff +1 -1 • 1 hunk • 1 file • unified");
-    expect(rendered).toContain("▌+ 2 │ TWO");
+    expect(rendered).toContain("↳ diff +1 -1 • 1 hunk • unified");
+    expect(rendered).toContain("2 + TWO");
     expect(JSON.stringify(result.details)).toBe(before);
   });
 
@@ -97,7 +97,7 @@ describe("edit TUI renderer", () => {
     const second = t.renderCall(args, theme, { ...complete, lastComponent: first });
     const rendered = textOf(second);
     expect(rendered).toContain("↳ pending edit");
-    expect(rendered).toContain("↳ diff +1 -1");
-    expect(rendered).toContain("▌+ 1 │ const value = 2;");
+    expect(rendered).toMatch(/↳ diff \S+ \+1 -1/);
+    expect(rendered).toContain("1 + const value = 2;");
 });
 });

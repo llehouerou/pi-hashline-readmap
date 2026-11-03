@@ -1,11 +1,27 @@
+import { basename } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { DiffData, DiffEntry, DiffSpan } from "./diff-data.js";
+import { diffPalette, type DiffBoxBg, type DiffPalette } from "./tui-diff-palette.js";
+import { highlightDiffEntries } from "./tui-diff-syntax.js";
 import { clampLineToWidth, clampLinesToWidth, getExpandHint, normalizeWidth, wrapWithHangingIndent, type RendererTheme } from "./tui-render-utils.js";
 
 export type TuiDiffMode = "split" | "unified" | "compact" | "summary";
-export type RenderTuiDiffInput = { diffData: DiffData; width: number; theme: RendererTheme; expanded: boolean; collapsedLines?: number };
+export type RenderTuiDiffInput = {
+  diffData: DiffData;
+  width: number;
+  theme: RendererTheme;
+  expanded: boolean;
+  collapsedLines?: number;
+  /** File the diff belongs to: names it in the header and picks the syntax highlighting language. */
+  path?: string;
+  /** Tool box background the rows sit on; defaults to the completed-tool background. */
+  boxBg?: DiffBoxBg;
+};
 export type RenderTuiDiffOutput = { mode: TuiDiffMode; width: number; lines: string[] };
-export const DEFAULT_COLLAPSED_LINES = 12;
+const DEFAULT_COLLAPSED_LINES = 12;
+
+/** Per-render styling: with a palette rows get tinted backgrounds and syntax colors, else plain fg tints. */
+type Style = { theme: RendererTheme; palette?: DiffPalette; syntax?: (string | undefined)[]; numWidth: number };
 
 function hasOldSide(data: DiffData): boolean { return data.entries.some((e) => e.kind === "remove" || e.kind === "context"); }
 function chooseMode(width: number, data: DiffData): TuiDiffMode {
@@ -27,52 +43,98 @@ function hunkIndexes(data: DiffData): number[] {
   });
 }
 function hunkCount(data: DiffData): number { return Math.max(1, ...hunkIndexes(data).map((h) => h + 1)); }
-function compactHeader(data: DiffData): string { return `↳ diff +${data.stats.added} -${data.stats.removed}`; }
-function header(data: DiffData, mode: TuiDiffMode, width: number): string {
+function header(input: RenderTuiDiffInput, mode: TuiDiffMode, width: number): string {
+  const data = input.diffData;
   if (mode === "summary" && width <= 10) return `↳ diff +${data.stats.added}`;
-  const full = `${compactHeader(data)} • ${hunkCount(data)} hunk • 1 file • ${mode === "split" ? "split" : "unified"}`;
-  return visibleWidth(full) <= width ? full : clampLineToWidth(compactHeader(data), width);
+  const stats = `+${data.stats.added} -${data.stats.removed}`;
+  const hunks = hunkCount(data);
+  const name = input.path ? `${basename(input.path)} ` : "";
+  const forms = [
+    `↳ diff ${name}${stats} • ${hunks} hunk${hunks === 1 ? "" : "s"} • ${mode === "split" ? "split" : "unified"}`,
+    `↳ diff ${name}${stats}`,
+    `↳ diff ${stats}`,
+  ];
+  return forms.find((form) => visibleWidth(form) <= width) ?? clampLineToWidth(forms[2]!, width);
 }
-function lineNo(entry: DiffEntry): string { return String(entry.kind === "add" ? entry.newLine : entry.kind === "remove" ? entry.oldLine : entry.kind === "context" ? entry.newLine : ""); }
+function lineNo(entry: DiffEntry): number | undefined { return entry.kind === "remove" ? entry.oldLine : entry.kind === "meta" ? undefined : entry.newLine; }
 function gutterMarker(entry: DiffEntry): string { return entry.kind === "add" ? "+" : entry.kind === "remove" ? "-" : " "; }
-function textOf(entry: DiffEntry): string { return "text" in entry ? entry.text : ""; }
 function padRightVisual(line: string, width: number): string { const visible = visibleWidth(line); return visible >= width ? line : line + " ".repeat(width - visible); }
-function tint(theme: RendererTheme, entry: DiffEntry, text: string): string { return entry.kind === "add" ? theme.fg("success", text) : entry.kind === "remove" ? theme.fg("error", text) : theme.fg("toolOutput", text); }
-function spans(theme: RendererTheme, spans: DiffSpan[] | undefined, fallback: string): string { return spans?.map((s) => s.kind === "add" ? theme.fg("success", s.text) : s.kind === "remove" ? theme.fg("error", s.text) : s.text).join("") ?? fallback; }
-function inlineText(input: RenderTuiDiffInput, index: number, entry: DiffEntry): string {
-  const pair = input.diffData.inlineDiffs?.find((d) => entry.kind === "remove" ? d.removeLineIndex === index : entry.kind === "add" ? d.addLineIndex === index : false);
-  if (!pair) return textOf(entry);
-  return entry.kind === "remove" ? spans(input.theme, pair.removeSpans, textOf(entry)) : entry.kind === "add" ? spans(input.theme, pair.addSpans, textOf(entry)) : textOf(entry);
+function rowBg(style: Style, entry: DiffEntry): string | undefined { return entry.kind === "add" ? style.palette?.add : entry.kind === "remove" ? style.palette?.remove : undefined; }
+
+/** Inserts `strong` before each changed span of `styled` (ANSI-coded `plain` text) and `line` after it. */
+function emphasize(styled: string, spans: DiffSpan[], strong: string, line: string): string {
+  const marks: Array<[number, string]> = [];
+  let pos = 0;
+  for (const span of spans) {
+    if (span.kind !== "equal") marks.push([pos, strong], [pos + span.text.length, line]);
+    pos += span.text.length;
+  }
+  const ansi = /\x1b\[[0-9;]*m/y;
+  let out = "";
+  let visible = 0;
+  let m = 0;
+  for (let k = 0; k < styled.length;) {
+    ansi.lastIndex = k;
+    const code = ansi.exec(styled);
+    if (code) { out += code[0]; k += code[0].length; continue; }
+    while (m < marks.length && marks[m]![0] === visible) out += marks[m++]![1];
+    out += styled[k];
+    k++;
+    visible++;
+  }
+  while (m < marks.length) out += marks[m++]![1];
+  return out;
 }
-function entryRows(input: RenderTuiDiffInput, i: number, e: DiffEntry, mode: "unified" | "compact", width: number): string[] {
-  if (e.kind === "meta" || (mode === "compact" && e.kind === "context")) return [];
-  const prefix = mode === "compact" ? `▌${gutterMarker(e)} ${lineNo(e)} ` : `▌${gutterMarker(e)} ${lineNo(e)} │ `;
-  return wrapWithHangingIndent(prefix, inlineText(input, i, e), width, { tint: (text) => tint(input.theme, e, text) });
+function content(input: RenderTuiDiffInput, style: Style, index: number, entry: DiffEntry): string {
+  const text = style.syntax?.[index] ?? entry.text;
+  const bg = rowBg(style, entry);
+  const pair = bg && input.diffData.inlineDiffs?.find((d) => entry.kind === "remove" ? d.removeLineIndex === index : d.addLineIndex === index);
+  const spans = pair ? (entry.kind === "remove" ? pair.removeSpans : pair.addSpans) : undefined;
+  const coherent = spans && spans.map((s) => s.text).join("") === entry.text;
+  const strong = entry.kind === "add" ? style.palette?.addStrong : style.palette?.removeStrong;
+  // Tabs as the 3 columns visibleWidth counts them for, so padded backgrounds line up.
+  return (coherent && strong && bg ? emphasize(text, spans!, strong, bg) : text).replace(/\t/g, "   ");
 }
-function unifiedRows(input: RenderTuiDiffInput, width: number, mode: "unified" | "compact" = "unified"): string[] {
-  return input.diffData.entries.flatMap((e, i) => entryRows(input, i, e, mode, width));
+function gutter(style: Style, entry: DiffEntry, lineNumber: number | undefined): string {
+  const marker = gutterMarker(entry);
+  const num = String(lineNumber ?? "").padStart(style.numWidth);
+  if (!style.palette) return `${num} ${marker} `;
+  const mark = entry.kind === "add" ? style.theme.fg("toolDiffAdded", marker) : entry.kind === "remove" ? style.theme.fg("toolDiffRemoved", marker) : marker;
+  return `${style.theme.fg("dim", num)} ${mark} `;
 }
-function splitRows(input: RenderTuiDiffInput, width: number): string[] {
+/** Fills the row to `width` on the entry's background, or tints it when the theme has no palette. */
+function paint(style: Style, entry: DiffEntry, row: string, width: number): string {
+  if (!style.palette) return entry.kind === "add" ? style.theme.fg("success", row) : entry.kind === "remove" ? style.theme.fg("error", row) : style.theme.fg("toolOutput", row);
+  const bg = rowBg(style, entry);
+  return bg ? `${bg}${row}${bg}${" ".repeat(Math.max(0, width - visibleWidth(row)))}${style.palette.restore}` : row;
+}
+function cellRows(input: RenderTuiDiffInput, style: Style, index: number, entry: DiffEntry, width: number, lineNumber = lineNo(entry)): string[] {
+  return wrapWithHangingIndent(gutter(style, entry, lineNumber), content(input, style, index, entry), width).map((row) => paint(style, entry, row, width));
+}
+function separator(style: Style, entry: DiffEntry, width: number): string {
+  const label = `╌╌ line ${lineNo(entry)} `;
+  return style.theme.fg("dim", clampLineToWidth(label + "╌".repeat(Math.max(0, width - visibleWidth(label))), width));
+}
+function entryRows(input: RenderTuiDiffInput, style: Style, index: number, entry: DiffEntry, mode: "unified" | "compact" | "split", width: number): string[] {
+  if (entry.kind === "meta" || (mode === "compact" && entry.kind === "context")) return [];
+  if (mode !== "split") return cellRows(input, style, index, entry, width);
   const pane = Math.max(10, Math.floor((width - 3) / 2));
-  const rows = [`${padRightVisual("old", pane)} │ new`];
-  const blankPane = " ".repeat(pane);
+  const blank = " ".repeat(pane);
+  const rule = style.palette ? style.theme.fg("dim", " │ ") : " │ ";
+  const left = entry.kind === "add" ? [] : cellRows(input, style, index, entry, pane, entry.oldLine);
+  const right = entry.kind === "remove" ? [] : cellRows(input, style, index, entry, pane);
+  return Array.from({ length: Math.max(left.length, right.length) }, (_, k) => `${padRightVisual(left[k] ?? blank, pane)}${rule}${right[k] ?? ""}`);
+}
+function bodyRows(input: RenderTuiDiffInput, style: Style, mode: "unified" | "compact" | "split", width: number): string[] {
+  const hunks = hunkIndexes(input.diffData);
+  const rows = mode === "split" ? [`${padRightVisual("old", Math.max(10, Math.floor((width - 3) / 2)))} │ new`] : [];
+  let current = -1;
   for (const [i, e] of input.diffData.entries.entries()) {
-    if (e.kind === "remove") {
-      const left = wrapWithHangingIndent(`▌- ${e.oldLine} │ `, inlineText(input, i, e), pane, { tint: (text) => tint(input.theme, e, text) });
-      for (const line of left) rows.push(`${padRightVisual(line, pane)} │ ${blankPane}`);
-    } else if (e.kind === "add") {
-      const right = wrapWithHangingIndent(`▌+ ${e.newLine} │ `, inlineText(input, i, e), pane, { tint: (text) => tint(input.theme, e, text) });
-      for (const line of right) rows.push(`${blankPane} │ ${line}`);
-    } else if (e.kind === "context") {
-      const left = wrapWithHangingIndent(`▌  ${e.oldLine} │ `, e.text, pane, { tint: (text) => tint(input.theme, e, text) });
-      const right = wrapWithHangingIndent(`▌  ${e.newLine} │ `, e.text, pane, { tint: (text) => tint(input.theme, e, text) });
-      const maxLen = Math.max(left.length, right.length);
-      for (let k = 0; k < maxLen; k++) {
-        const l = left[k] ?? blankPane;
-        const r = right[k] ?? blankPane;
-        rows.push(`${padRightVisual(l, pane)} │ ${r}`);
-      }
-    }
+    const next = entryRows(input, style, i, e, mode, width);
+    if (next.length === 0) continue;
+    if (hunks[i] !== current && current >= 0) rows.push(separator(style, e, width));
+    current = hunks[i]!;
+    rows.push(...next);
   }
   return rows;
 }
@@ -89,7 +151,7 @@ function hiddenHint(hiddenLines: number, hiddenHunks: number, width: number): st
 }
 const isChange = (e: DiffEntry | undefined) => e?.kind === "add" || e?.kind === "remove";
 // Collapsed preview: changed lines plus one adjacent context line, capped at maxRows rendered rows.
-function collapsedPreview(input: RenderTuiDiffInput, mode: "unified" | "compact", width: number, maxRows: number): { rows: string[]; hiddenLines: number; hiddenHunks: number } {
+function collapsedPreview(input: RenderTuiDiffInput, style: Style, mode: "unified" | "compact", width: number, maxRows: number): { rows: string[]; hiddenLines: number; hiddenHunks: number } {
   const entries = input.diffData.entries;
   const hunks = hunkIndexes(input.diffData);
   const rows: string[] = [];
@@ -97,8 +159,9 @@ function collapsedPreview(input: RenderTuiDiffInput, mode: "unified" | "compact"
   let shown = 0;
   for (const [i, e] of entries.entries()) {
     if (!isChange(e) && !(e.kind === "context" && (isChange(entries[i - 1]) || isChange(entries[i + 1])))) continue;
-    const next = entryRows(input, i, e, mode, width);
-    if (next.length === 0) continue;
+    const cells = entryRows(input, style, i, e, mode, width);
+    if (cells.length === 0) continue;
+    const next = shownHunks.size > 0 && !shownHunks.has(hunks[i]!) ? [separator(style, e, width), ...cells] : cells;
     if (rows.length + next.length > maxRows) {
       // An entry taller than the whole budget still shows its first rows.
       if (rows.length === 0) { rows.push(...next.slice(0, maxRows)); shown++; shownHunks.add(hunks[i]!); }
@@ -111,6 +174,13 @@ function collapsedPreview(input: RenderTuiDiffInput, mode: "unified" | "compact"
   const total = entries.filter((e) => e.kind !== "meta").length;
   return { rows, hiddenLines: total - shown, hiddenHunks: hunkCount(input.diffData) - shownHunks.size };
 }
+function makeStyle(input: RenderTuiDiffInput): Style {
+  const palette = diffPalette(input.theme, input.boxBg ?? "toolSuccessBg");
+  const themeName = String((input.theme as { name?: unknown }).name ?? "");
+  const syntax = palette ? highlightDiffEntries(input.diffData, input.path, themeName) : undefined;
+  const numWidth = Math.max(1, ...input.diffData.entries.flatMap((e) => ["oldLine" in e ? e.oldLine : 0, "newLine" in e ? e.newLine : 0]).map((n) => String(n).length));
+  return { theme: input.theme, palette, syntax, numWidth };
+}
 export function renderTuiDiff(input: RenderTuiDiffInput): RenderTuiDiffOutput {
   const width = normalizeWidth(input.width);
   const expandedMode = chooseMode(width, input.diffData);
@@ -120,12 +190,11 @@ export function renderTuiDiff(input: RenderTuiDiffInput): RenderTuiDiffOutput {
   if (!input.expanded) {
     const maxRows = input.collapsedLines ?? DEFAULT_COLLAPSED_LINES;
     if (mode === "summary" || mode === "split" || maxRows <= 0) return { mode, width, lines: [] };
-    const preview = collapsedPreview(input, mode, width, maxRows);
+    const preview = collapsedPreview(input, makeStyle(input), mode, width, maxRows);
     const hint = preview.hiddenLines > 0 ? [hiddenHint(preview.hiddenLines, preview.hiddenHunks, width)] : [];
     return { mode, width, lines: clampLinesToWidth([...preview.rows, ...hint], width) };
   }
-  const lines = [header(input.diffData, mode, width)];
+  const lines = [header(input, mode, width)];
   if (mode === "summary") return { mode, width, lines: clampLinesToWidth(lines, width) };
-  const rows = mode === "split" ? splitRows(input, width) : unifiedRows(input, width, mode);
-  return { mode, width, lines: [...lines, ...rows] };
+  return { mode, width, lines: [...lines, ...bodyRows(input, makeStyle(input), mode, width)] };
 }

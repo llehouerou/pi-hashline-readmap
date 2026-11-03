@@ -65,37 +65,22 @@ export function wrapLinesToWidth(lines: string[], width: number | undefined): st
   });
 }
 
-export interface WrapWithHangingIndentOptions {
-  /** Optional transform applied to each produced line (e.g. theme tinting). */
-  tint?: (text: string) => string;
-}
-
 /**
  * Wrap a single visual row that has a leading prefix (gutter, line number,
  * separator) such that continuation lines are indented to align with the
- * content column. Each produced line is clamped to `width`. If `tint` is
- * provided, it is applied to each output line so theme styling extends across
- * wrapped rows without leaking the prefix into the colored span.
+ * content column. Each produced line is clamped to `width`.
  */
-export function wrapWithHangingIndent(
-  prefix: string,
-  content: string,
-  width: number | undefined,
-  options: WrapWithHangingIndentOptions = {},
-): string[] {
-  const tint = options.tint ?? ((text: string) => text);
-  if (width === undefined || width === null) return [tint(prefix + content)];
+export function wrapWithHangingIndent(prefix: string, content: string, width: number | undefined): string[] {
+  if (width === undefined || width === null) return [prefix + content];
   const normalized = normalizeWidth(width);
   const combined = prefix + content;
-  if (visibleWidth(combined) <= normalized) return [tint(combined)];
+  if (visibleWidth(combined) <= normalized) return [combined];
   const prefixWidth = visibleWidth(prefix);
   const contentWidth = Math.max(1, normalized - prefixWidth);
   const wrapped = wrapTextWithAnsi(content, contentWidth);
-  if (wrapped.length === 0) return [tint(clampLineToWidth(prefix, normalized))];
+  if (wrapped.length === 0) return [clampLineToWidth(prefix, normalized)];
   const indent = " ".repeat(prefixWidth);
-  return wrapped.map((line, index) =>
-    tint(clampLineToWidth(index === 0 ? prefix + line : indent + line, normalized)),
-  );
+  return wrapped.map((line, index) => clampLineToWidth(index === 0 ? prefix + line : indent + line, normalized));
 }
 const HASHLINE_CONTENT_RE = /^(\d+:[0-9a-fA-F]+\|)(.*)$/;
 

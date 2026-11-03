@@ -1,10 +1,10 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { DiffData } from "./diff-data.js";
-import { renderTuiDiff } from "./tui-diff-renderer.js";
-import { clampLineToWidth, getExpandHint, normalizeWidth, type RendererTheme } from "./tui-render-utils.js";
+import { renderTuiDiff, type RenderTuiDiffInput } from "./tui-diff-renderer.js";
+import { clampLineToWidth, getExpandHint, normalizeWidth } from "./tui-render-utils.js";
 
-export interface DiffPreviewComponentOptions {
+/** Diff body inputs (data, theme, expanded, collapsed budget, path, box background) plus framing lines. */
+export interface DiffPreviewComponentOptions extends Omit<RenderTuiDiffInput, "width"> {
 	/**
 	 * Lines rendered before the diff body (e.g. tool summary, "pending edit"
 	 * header). Each entry is one logical line; the component is responsible
@@ -16,14 +16,6 @@ export interface DiffPreviewComponentOptions {
 	 * unused but kept for symmetry.
 	 */
 	suffixLines?: string[];
-	/** Diff body data. */
-	diffData: DiffData;
-	/** Theme passed through to renderTuiDiff for color tinting. */
-	theme: RendererTheme;
-	/** Whether the diff body should render in expanded form. */
-	expanded: boolean;
-	/** Rendered row budget of the collapsed preview (0 = header and hint only). */
-	collapsedLines?: number;
 	/**
 	 * Optional fallback width used when render() receives an invalid width
 	 * (zero, negative, NaN). Defaults to 80.
@@ -76,13 +68,7 @@ export class DiffPreviewComponent implements Component {
 		for (const prefix of this.options.prefixLines ?? []) {
 			for (const line of prefix.split("\n")) lines.push(clampLineToWidth(line, normalized));
 		}
-		const body = renderTuiDiff({
-			diffData: this.options.diffData,
-			width: normalized,
-			theme: this.options.theme,
-			expanded: this.options.expanded,
-			collapsedLines: this.options.collapsedLines,
-		});
+		const body = renderTuiDiff({ ...this.options, width: normalized });
 		for (const line of body.lines) lines.push(line);
 		for (const suffix of this.options.suffixLines ?? []) {
 			for (const line of suffix.split("\n")) lines.push(clampLineToWidth(line, normalized));
