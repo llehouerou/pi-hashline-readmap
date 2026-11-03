@@ -216,29 +216,43 @@ describe("renderTuiDiff with the pi theme", () => {
   const strip = (s: string) => plain(s);
   const bgOf = (code: string) => code.replace("\x1b[", "").replace("m", "");
 
-  it("fills changed rows with a theme-derived background over the full width", () => {
+  it("puts the diff body on a neutral panel with full-width tinted change rows", () => {
     const palette = diffPalette(piTheme, "toolSuccessBg")!;
     expect(palette).toBeDefined();
     const restore = piTheme.getBgAnsi("toolSuccessBg");
     expect(palette.restore).toBe(restore);
-    for (const code of [palette.add, palette.remove, palette.addStrong, palette.removeStrong]) {
-      expect(code).toMatch(/^\x1b\[48;2;\d+;\d+;\d+m$/);
-      expect(code).not.toBe(restore);
-    }
+    expect(palette.panel).toBe(piTheme.getBgAnsi("toolPendingBg"));
+    const tints = [palette.add, palette.remove, palette.addGutter, palette.removeGutter, palette.addStrong, palette.removeStrong];
+    for (const code of tints) expect(code).toMatch(/^\x1b\[48;2;\d+;\d+;\d+m$/);
+    expect(new Set([palette.panel, restore, ...tints]).size).toBe(8);
     for (const width of [60, 80, 120]) {
       for (const expanded of [true, false]) {
         const out = renderTuiDiff({ diffData, width, theme: piTheme, expanded, path: "sample.ts" });
         for (const line of out.lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-        const unifiedWidth = out.mode === "split" ? Math.floor((width - 3) / 2) : width;
+        const paneWidth = out.mode === "split" ? width - Math.floor((width - 3) / 2) - 3 : width;
         const addRow = out.lines.find((line) => strip(line).includes("+ three"))!;
+        expect(strip(addRow)).toContain("▌3 + three");
+        expect(addRow).toContain(palette.addGutter);
         expect(addRow).toContain(palette.add);
         expect(addRow.endsWith(restore)).toBe(true);
-        if (out.mode !== "split") expect(addRow.startsWith(palette.add)).toBe(true);
-        if (out.mode !== "split") expect(visibleWidth(addRow)).toBe(unifiedWidth);
+        if (out.mode !== "split") expect(addRow.startsWith(palette.addGutter)).toBe(true);
+        expect(visibleWidth(addRow)).toBe(out.mode === "split" ? width : paneWidth);
         const contextRow = out.lines.find((line) => strip(line).includes("one"))!;
+        expect(contextRow.startsWith(palette.panel)).toBe(true);
         expect(contextRow).not.toContain(bgOf(palette.add));
       }
     }
+  });
+
+  it("falls back to unified when split would be unbalanced or wrap-heavy", () => {
+    const entries = (removed: number, added: number, text = "x"): DiffData => ({ version: 1, stats: { added, removed, context: 0 }, entries: [
+      ...Array.from({ length: removed }, (_, i) => ({ kind: "remove" as const, oldLine: i + 1, text })),
+      ...Array.from({ length: added }, (_, i) => ({ kind: "add" as const, newLine: i + 1, text })),
+    ] });
+    expect(renderTuiDiff({ diffData: entries(2, 4), width: 140, theme: identityTheme, expanded: true }).mode).toBe("split");
+    expect(renderTuiDiff({ diffData: entries(1, 3), width: 140, theme: identityTheme, expanded: true }).mode).toBe("unified");
+    expect(renderTuiDiff({ diffData: entries(3, 0), width: 140, theme: identityTheme, expanded: true }).mode).toBe("unified");
+    expect(renderTuiDiff({ diffData: entries(2, 2, "y".repeat(80)), width: 140, theme: identityTheme, expanded: true }).mode).toBe("unified");
   });
 
   it("puts changed spans on a stronger background and restores the row background after them", () => {
@@ -281,11 +295,11 @@ describe("renderTuiDiff with the pi theme", () => {
 
     const out = renderTuiDiff({ diffData: code, width: 70, theme: piTheme, expanded: true, path: "sample.ts" });
     expect(out.lines.map(strip).slice(1)).toEqual([
-      "1   /* start of a",
-      "2 -    long comment */ const a = 1;",
-      "2 +    long comment */ const b = 2;",
-      "3 + export function f() { return \"x\"; }",
-    ].map((row, i) => i === 0 ? row : row.padEnd(70)));
+      " 1   /* start of a",
+      "▌2 -    long comment */ const a = 1;",
+      "▌2 +    long comment */ const b = 2;",
+      "▌3 + export function f() { return \"x\"; }",
+    ].map((row) => row.padEnd(70)));
     for (const line of out.lines) expect(visibleWidth(line)).toBeLessThanOrEqual(70);
   });
 
@@ -300,9 +314,10 @@ describe("renderTuiDiff with the pi theme", () => {
       expect(rows.length).toBeGreaterThan(1);
       for (const row of rows) {
         expect(visibleWidth(row)).toBe(width);
-        expect(row.startsWith(palette.add)).toBe(true);
+        expect(row.startsWith(palette.addGutter)).toBe(true);
+        expect(row).toContain(palette.add);
       }
-      expect(strip(rows[1]!).startsWith("    ")).toBe(true);
+      expect(strip(rows[1]!).startsWith("▌    ")).toBe(true);
     }
   });
 });

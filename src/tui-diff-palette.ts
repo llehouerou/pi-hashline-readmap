@@ -3,13 +3,27 @@ import type { RendererTheme } from "./tui-render-utils.js";
 /** Background of the pi tool box the diff sits in: pending before execution, success after. */
 export type DiffBoxBg = "toolPendingBg" | "toolSuccessBg";
 
-/** Background SGR codes for diff rows; `restore` puts the tool box background back. */
-export interface DiffPalette { add: string; remove: string; addStrong: string; removeStrong: string; restore: string }
+/**
+ * Background SGR codes for diff rows. The diff body sits on `panel`, the theme's neutral pending-tool
+ * background, so a colored tool box (the green success box) does not tint it; `restore` puts the tool
+ * box background back at the end of each row.
+ */
+export interface DiffPalette {
+  panel: string;
+  add: string;
+  remove: string;
+  addGutter: string;
+  removeGutter: string;
+  addStrong: string;
+  removeStrong: string;
+  restore: string;
+}
 
 type Rgb = [number, number, number];
 type ColorTheme = RendererTheme & { getFgAnsi?(color: string): string; getBgAnsi?(color: string): string; getColorMode?(): string };
 
-// Share of the diff color mixed into the box background: discreet for rows, stronger for changed spans.
+// Share of the diff color mixed into the panel: subtler for the gutter, discreet for rows, stronger for changed spans.
+const GUTTER_ALPHA = 0.12;
 const ROW_ALPHA = 0.2;
 const SPAN_ALPHA = 0.42;
 const BASIC_16: Rgb[] = [
@@ -44,38 +58,42 @@ function mix(base: Rgb, color: Rgb, alpha: number): Rgb {
 }
 
 /**
- * Derives the diff row backgrounds from the active pi theme: its diff add/remove colors blended
- * into the tool box background. Undefined when the theme exposes no parseable colors.
+ * Derives the diff backgrounds from the active pi theme: its diff add/remove colors blended into its
+ * neutral pending-tool background. Undefined when the theme exposes no parseable colors.
  */
 export function diffPalette(theme: RendererTheme, boxBg: DiffBoxBg): DiffPalette | undefined {
   const t = theme as ColorTheme;
   if (typeof t.getFgAnsi !== "function" || typeof t.getBgAnsi !== "function") return undefined;
-  let codes: [string, string, string];
+  let codes: [string, string, string, string];
   try {
-    codes = [t.getBgAnsi(boxBg), t.getFgAnsi("toolDiffAdded"), t.getFgAnsi("toolDiffRemoved")];
+    codes = [t.getBgAnsi("toolPendingBg"), t.getFgAnsi("toolDiffAdded"), t.getFgAnsi("toolDiffRemoved"), t.getBgAnsi(boxBg)];
   } catch {
     return undefined;
   }
   const truecolor = t.getColorMode?.() !== "256color";
   const key = `${codes.join("|")}|${truecolor}`;
   if (!cache.has(key)) {
-    const [base, added, removed] = codes.map(parseAnsiColor);
-    if (!base || !added || !removed) cache.set(key, null);
-    else if (truecolor) {
-      const bg = (color: Rgb, alpha: number) => `\x1b[48;2;${mix(base, color, alpha).join(";")}m`;
-      cache.set(key, { add: bg(added, ROW_ALPHA), addStrong: bg(added, SPAN_ALPHA), remove: bg(removed, ROW_ALPHA), removeStrong: bg(removed, SPAN_ALPHA), restore: codes[0] });
-    } else {
+    const [panel, added, removed] = codes.map(parseAnsiColor);
+    if (!panel || !added || !removed) cache.set(key, null);
+    else {
+      const panelIndex = rgbTo256(panel);
       // 256 colors are coarse: raise the share until the tint leaves the colors it must stand out from.
-      const bg = (color: Rgb, alpha: number, avoid: number[]) => {
-        let n = rgbTo256(mix(base, color, alpha));
-        for (let a = alpha; avoid.includes(n) && a < 1; a += 0.1) n = rgbTo256(mix(base, color, Math.min(1, a + 0.1)));
-        return n;
+      const tint = (color: Rgb, alpha: number, avoid: number[]) => {
+        if (truecolor) return { index: -1, code: `\x1b[48;2;${mix(panel, color, alpha).join(";")}m` };
+        let n = rgbTo256(mix(panel, color, alpha));
+        for (let a = alpha; avoid.includes(n) && a < 1; a += 0.1) n = rgbTo256(mix(panel, color, Math.min(1, a + 0.1)));
+        return { index: n, code: `\x1b[48;5;${n}m` };
       };
-      const baseIndex = rgbTo256(base);
-      const add = bg(added, ROW_ALPHA, [baseIndex]);
-      const remove = bg(removed, ROW_ALPHA, [baseIndex]);
-      const code = (n: number) => `\x1b[48;5;${n}m`;
-      cache.set(key, { add: code(add), addStrong: code(bg(added, SPAN_ALPHA, [baseIndex, add])), remove: code(remove), removeStrong: code(bg(removed, SPAN_ALPHA, [baseIndex, remove])), restore: codes[0] });
+      const shades = (color: Rgb) => {
+        const row = tint(color, ROW_ALPHA, [panelIndex]);
+        return { row: row.code, gutter: tint(color, GUTTER_ALPHA, [panelIndex]).code, strong: tint(color, SPAN_ALPHA, [panelIndex, row.index]).code };
+      };
+      const add = shades(added);
+      const remove = shades(removed);
+      cache.set(key, {
+        panel: codes[0], add: add.row, remove: remove.row, addGutter: add.gutter, removeGutter: remove.gutter,
+        addStrong: add.strong, removeStrong: remove.strong, restore: codes[3],
+      });
     }
   }
   return cache.get(key) ?? undefined;
