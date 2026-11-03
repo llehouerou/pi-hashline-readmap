@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- Collapsed `edit` and `write` (overwrite) diffs, final and pending, show a preview under the summary line instead of nothing: changed lines plus one adjacent context line, capped at `edit.collapsedLines` rendered rows (env `PI_HASHLINE_EDIT_COLLAPSED_LINES`, default 12, `0` restores the summary line alone), then a `… (K more diff lines • Ctrl+O to expand)` hint. The pending preview is now computed in collapsed mode too. Expanded rendering is unchanged.
 - RTK passes `git diff` output through untouched (ANSI-stripped) instead of cutting it to 100 lines. The cut dropped the middle of mid-size diffs, which is what a review reads; the bash context guard still offloads output over its size limit to a file. `git show` was already untouched. `git log` passes through untouched too: it kept only the first 20 commits, or 20 lines without commit headers, which cut an explicit `git log --oneline -30` or a `HEAD..upstream/main` range.
 - `read` without `offset`, `limit`, or `symbol` of a file over 400 lines or 15,000 characters returns its first window (up to 200 lines / 10,000 characters) plus its structural map, and says how to fetch the rest with `offset`/`limit` or `symbol`. Whole reads of large files cost the most context for the least use; an explicit `limit` still reads further at once. Smaller files are unchanged.
 

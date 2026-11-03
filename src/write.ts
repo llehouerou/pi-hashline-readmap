@@ -19,6 +19,7 @@ import { generateCompactOrFullDiff, normalizeToLF, hasBareCarriageReturn } from 
 import { buildDiffData, type DiffData } from "./diff-data.js";
 import { clampLineToWidth, clampLinesToWidth, isRendererExpanded, linkToolPath, renderToolLabel, summaryLine } from "./tui-render-utils.js";
 import { DiffPreviewComponent } from "./tui-diff-component.js";
+import { resolveEditCollapsedLines } from "./hashline-settings.js";
 import {
   buildRequiredNullParameterError,
   normalizeToolParameters,
@@ -53,10 +54,10 @@ function formatContentPreviewLines(content: string, theme: any): string[] {
 }
 
 function pendingWritePreviewParts(summary: string, preview: PendingDiffPreviewResult | undefined, expanded: boolean, theme: any): { lines: string[]; diffData?: DiffData } {
-  if (!expanded || !preview || preview.type !== "ok") return { lines: summary.split("\n") };
-  const headerLine = summaryLine(preview.data.headerLabel, { hidden: false });
+  if (!preview || preview.type !== "ok") return { lines: summary.split("\n") };
+  const headerLine = summaryLine(preview.data.headerLabel, { hidden: !expanded });
   if (!preview.data.fileExistedBeforeWrite) {
-    return { lines: [summary, headerLine, ...formatContentPreviewLines(preview.data.nextContent, theme)] };
+    return { lines: expanded ? [summary, headerLine, ...formatContentPreviewLines(preview.data.nextContent, theme)] : [summary, headerLine] };
   }
   const diffData = buildDiffData({
     path: preview.data.filePath,
@@ -504,9 +505,8 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
       }
       const expanded = !!context.expanded;
       const argsStable = context.argsComplete === true;
-      const previewEligible = argsStable && expanded;
-      const previewKey = previewEligible ? buildWritePreviewKey(args ?? {}) : undefined;
-      const preview = previewEligible
+      const previewKey = argsStable ? buildWritePreviewKey(args ?? {}) : undefined;
+      const preview = argsStable
         ? resolvePendingDiffPreview(
             context,
             WRITE_PENDING_PREVIEW_STATE_KEY,
@@ -514,7 +514,7 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
             () => buildPendingWritePreviewData(args ?? {}, context.cwd ?? process.cwd()),
           )
         : undefined;
-      const parts: { lines: string[]; diffData?: DiffData } = !expanded && argsStable && typeof path === "string" && typeof content === "string"
+      const parts: { lines: string[]; diffData?: DiffData } = !expanded && argsStable && typeof path === "string" && typeof content === "string" && preview?.type !== "ok"
         ? {
             lines: [
               text,
@@ -523,10 +523,11 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
           }
         : pendingWritePreviewParts(text, preview, expanded, theme);
       if (parts.diffData) {
+        const diffOptions = { prefixLines: parts.lines, diffData: parts.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
         const diffComponent = context.lastComponent instanceof DiffPreviewComponent
           ? context.lastComponent
-          : new DiffPreviewComponent({ prefixLines: parts.lines, diffData: parts.diffData, theme, expanded: true });
-        diffComponent.update({ prefixLines: parts.lines, diffData: parts.diffData, theme, expanded: true });
+          : new DiffPreviewComponent(diffOptions);
+        diffComponent.update(diffOptions);
         return diffComponent;
       }
       const textComponent = (context.lastComponent && !(context.lastComponent instanceof DiffPreviewComponent))
@@ -564,11 +565,12 @@ export function registerWriteTool(pi: ExtensionAPI, options: WriteToolOptions = 
       // Overwrite: the old vs new comparison still carries signal — keep the diff UI.
       const hasExpandableDiff = !!diffData;
       let text = summaryLine(state, { hidden: hasExpandableDiff && !expanded });
-      if (expanded && hasExpandableDiff) {
+      if (hasExpandableDiff) {
+        const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
         const diffComponent = context.lastComponent instanceof DiffPreviewComponent
           ? context.lastComponent
-          : new DiffPreviewComponent({ prefixLines: text.split("\n"), diffData, theme, expanded: true });
-        diffComponent.update({ prefixLines: text.split("\n"), diffData, theme, expanded: true });
+          : new DiffPreviewComponent(diffOptions);
+        diffComponent.update(diffOptions);
         return diffComponent;
       }
       return new Text(clampLinesToWidth(text.split("\n"), width).join("\n"), 0, 0);

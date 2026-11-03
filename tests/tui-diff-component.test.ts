@@ -55,22 +55,20 @@ describe("DiffPreviewComponent", () => {
 		expect(at60.some((line) => line.endsWith("..."))).toBe(false);
 	});
 
-	it("respects expanded=false by omitting the body and showing a hidden hint", () => {
+	it("respects expanded=false by rendering a capped preview and a hidden hint", () => {
 		const comp = new DiffPreviewComponent({
 			prefixLines: ["write sample.txt", "↳ pending overwrite"],
 			diffData: longDiffData,
 			theme: identityTheme,
 			expanded: false,
+			collapsedLines: 2,
 		});
 		const lines = comp.render(120);
-		const text = lines.join("\n");
-		expect(text).toContain("write sample.txt");
-		expect(text).toContain("↳ pending overwrite");
-		// In collapsed mode the diff renderer emits the hidden-content hint
-		// rather than the body rows.
-		expect(text).not.toContain("▌- 1 │ ");
-		expect(text).not.toContain("▌+ 1 │ ");
-		expect(text).toMatch(/^…|^… \(/m);
+		expect(lines.slice(0, 2)).toEqual(["write sample.txt", "↳ pending overwrite"]);
+		expect(lines[2]).toContain("▌- 1 │ ");
+		expect(lines).toHaveLength(5);
+		expect(lines[4]).toMatch(/^… \(2 more diff lines/);
+		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(120);
 	});
 
 	it("invalidates cached output when update() changes inputs", () => {
@@ -98,6 +96,7 @@ it("refreshes cached collapsed diff hints after a binding change at the same wid
       diffData: longDiffData,
       theme: identityTheme,
       expanded: false,
+      collapsedLines: 1,
     });
     const first = component.render(120);
     assert.strictEqual(component.render(120), first);
@@ -108,12 +107,12 @@ it("refreshes cached collapsed diff hints after a binding change at the same wid
     assert.notStrictEqual(second, first);
     assert.strictEqual(component.render(120), second);
     assert.equal(second.length, first.length);
-    assert.ok(plain(second.join("\n")).includes("3 more diff lines • 1 more hunk"));
+    assert.ok(plain(second.join("\n")).includes("2 more diff lines"));
     assert.ok(second.every(line => visibleWidth(line) <= 120));
     for (const disabled of [[], ""] as const) {
       bindings.setUserBindings({ "app.tools.expand": disabled });
       const withoutHint = component.render(120);
-      assert.equal(plain(withoutHint[1]), "… (3 more diff lines • 1 more hunk)");
+      assert.equal(plain(withoutHint[1]), "… (2 more diff lines)");
       assert.strictEqual(component.render(120), withoutHint);
       assert.ok(withoutHint.every(line => visibleWidth(line) <= 120));
     }

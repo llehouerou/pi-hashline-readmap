@@ -103,14 +103,36 @@ describe("renderTuiDiff", () => {
     expect(splitText).toContain("▌  2 │ two");
   });
 
-  it("renders collapsed progressive hidden-content hints", () => {
+  it("renders a collapsed preview without header, hinting only when rows are hidden", () => {
     const collapsed = renderTuiDiff({ diffData, width: 80, theme, expanded: false });
-    expect(collapsed.lines[0]).toBe("↳ diff +2 -1 • 1 hunk • 1 file • unified");
-    expect(collapsed.lines[1]).toBe(
-      `… (4 more diff lines • 1 more hunk • ${keyHint("app.tools.expand", "to expand")})`,
-    );
-    expect(renderTuiDiff({ diffData, width: 36, theme, expanded: false }).lines.at(-1)).toMatch(/^… \(/);
-    expect(renderTuiDiff({ diffData, width: 8, theme, expanded: false }).lines.at(-1)).toBe("…");
+    expect(collapsed.mode).toBe("unified");
+    expect(collapsed.lines).toEqual(["▌  1 │ one", "▌- 2 │ two", "▌+ 2 │ TWO", "▌+ 3 │ three"]);
+    expect(renderTuiDiff({ diffData, width: 120, theme, expanded: false }).mode).toBe("unified");
+    expect(renderTuiDiff({ diffData, width: 8, theme, expanded: false }).lines).toEqual([]);
+    expect(renderTuiDiff({ diffData, width: 80, theme, expanded: false, collapsedLines: 0 }).lines).toEqual([]);
+  });
+
+  it("caps the collapsed preview at collapsedLines rendered rows with minimal context", () => {
+    const entries: DiffData["entries"] = [];
+    for (let n = 1; n <= 6; n++) entries.push({ kind: "context", oldLine: n, newLine: n, text: `ctx ${n}` });
+    for (let n = 7; n <= 26; n++) entries.push({ kind: "add", newLine: n, text: `added ${n}` });
+    entries.push({ kind: "context", oldLine: 7, newLine: 27, text: "after" });
+    entries.push({ kind: "meta", text: "   ..." });
+    entries.push({ kind: "remove", oldLine: 50, text: "gone" });
+    const big: DiffData = { version: 1, stats: { added: 20, removed: 1, context: 7 }, entries };
+    for (const width of [30, 60, 80, 140]) {
+      const out = renderTuiDiff({ diffData: big, width, theme: identityTheme, expanded: false, collapsedLines: 5 });
+      expect(out.lines).toHaveLength(6);
+      for (const line of out.lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+    const out = renderTuiDiff({ diffData: big, width: 80, theme: identityTheme, expanded: false, collapsedLines: 5 });
+    // Only the context line adjacent to the change survives.
+    expect(out.lines.slice(0, 5)).toEqual(["▌  6 │ ctx 6", "▌+ 7 │ added 7", "▌+ 8 │ added 8", "▌+ 9 │ added 9", "▌+ 10 │ added 10"]);
+    expect(out.lines[5]).toBe(`… (23 more diff lines • 1 more hunk • ${keyHint("app.tools.expand", "to expand")})`);
+    // Wrapped rows count against the budget.
+    const longEntry: DiffData = { version: 1, stats: { added: 1, removed: 0, context: 0 }, entries: [{ kind: "add", newLine: 1, text: "word ".repeat(80) }] };
+    const wrapped = renderTuiDiff({ diffData: longEntry, width: 40, theme: identityTheme, expanded: false, collapsedLines: 3 });
+    expect(wrapped.lines).toHaveLength(3);
   });
 
   it("wraps long diff rows with hanging indent instead of truncating with ellipsis", () => {
@@ -186,29 +208,27 @@ it("updates collapsed diff hints when the active host shortcut changes", () => {
   hostTui.setKeybindings(bindings);
   try {
     const defaultHint = keyHint("app.tools.expand", "to expand");
-    const first = renderTuiDiff({ diffData, width: 120, theme, expanded: false });
+    const first = renderTuiDiff({ diffData, width: 120, theme, expanded: false, collapsedLines: 1 });
     bindings.setUserBindings({ "app.tools.expand": ["ctrl+shift+alt+x", "ctrl+alt+enter"] });
     const customHint = keyHint("app.tools.expand", "to expand");
-    const second = renderTuiDiff({ diffData, width: 120, theme, expanded: false });
+    const second = renderTuiDiff({ diffData, width: 120, theme, expanded: false, collapsedLines: 1 });
     assert.ok(plain(second.lines[1] ?? "").includes(plain(customHint)),
       "collapsed diff uses a stale expansion shortcut");
-    assert.equal(first.lines[1], `… (4 more diff lines • 1 more hunk • ${defaultHint})`);
+    assert.equal(first.lines[1], `… (3 more diff lines • ${defaultHint})`);
     assert.equal(plain(defaultHint), "ctrl+o to expand");
-    assert.equal(second.lines[1], `… (4 more diff lines • 1 more hunk • ${customHint})`);
+    assert.equal(second.lines[1], `… (3 more diff lines • ${customHint})`);
     assert.notEqual(plain(second.lines[1]), plain(first.lines[1]));
     assert.equal(second.lines.length, 2);
-    assert.ok(!second.lines.join("\n").includes("▌+"));
     for (const config of [{}, { "app.tools.expand": ["ctrl+shift+alt+x", "ctrl+alt+enter"] }]) {
       bindings.setUserBindings(config);
       for (const width of [8, 24, 36, 80, 120, 200]) {
         for (const expanded of [false, true]) {
-          const out = renderTuiDiff({ diffData, width, theme, expanded });
+          const out = renderTuiDiff({ diffData, width, theme, expanded, collapsedLines: 1 });
           assert.ok(out.lines.every(line => visibleWidth(line) <= width));
         }
       }
-      assert.equal(renderTuiDiff({ diffData, width: 36, theme, expanded: false }).lines[1],
-        "… (4 more lines • 1 hunks)");
-      assert.equal(renderTuiDiff({ diffData, width: 8, theme, expanded: false }).lines[1], "…");
+      assert.equal(renderTuiDiff({ diffData, width: 30, theme, expanded: false, collapsedLines: 1 }).lines[1],
+        "… (3 more diff lines)");
       const expanded = renderTuiDiff({ diffData, width: 80, theme, expanded: true });
       assert.ok(expanded.lines.join("\n").includes("▌+ 2 │ TWO"));
       assert.ok(!expanded.lines.some(line => plain(line).includes("to expand")));

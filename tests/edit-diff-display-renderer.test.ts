@@ -166,7 +166,7 @@ describe("edit renderer default behavior is unchanged with no setting and no env
     __resetHashlineSettingsPathsForTest();
   });
 
-  it("keeps the final-result diff hidden when nothing requests expansion", () => {
+  it("shows a capped final-result preview when nothing requests expansion", () => {
     delete process.env.PI_HASHLINE_EDIT_DIFF_DISPLAY;
     const root = join(tmpdir(), `edit-diff-renderer-default-${randomBytes(6).toString("hex")}`);
     __setHashlineSettingsPathsForTest({
@@ -192,8 +192,10 @@ describe("edit renderer default behavior is unchanged with no setting and no env
       getEditTool().renderResult(result, { expanded: false, width: 80 }, theme, { expanded: false, width: 80 }),
       80,
     );
+    // Collapsed: a capped preview under the summary line, without the expanded diff header.
+    expect(rendered).toContain("↳ edited +1 -1");
     expect(rendered).not.toContain("↳ diff +1 -1");
-    expect(rendered).not.toContain("▌+ 2 │ TWO");
+    expect(rendered).toContain("▌+ 2 │ TWO");
   });
 
   it("still expands the final-result diff when context.expanded is true", () => {
