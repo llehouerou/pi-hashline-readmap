@@ -39,7 +39,7 @@ import { buildDiffData, type DiffBlockRange } from "./diff-data.js";
 import { clampLineToWidth, clampLinesToWidth, isRendererExpanded, linkToolPath, summaryLine } from "./tui-render-utils.js";
 import { DiffPreviewComponent } from "./tui-diff-component.js";
 import { buildContextHygieneMetadata, buildFileResource, type ContextHygieneMetadata } from "./context-hygiene.js";
-import { resolveEditDiffDisplay } from "./hashline-settings.js";
+import { resolveEditCollapsedLines, resolveEditDiffDisplay } from "./hashline-settings.js";
 import { packageFileUrl } from "./package-root.js";
 import { looksLikeBinary } from "./binary-detect.js";
 import {
@@ -50,14 +50,14 @@ import {
 const EDIT_PENDING_PREVIEW_STATE_KEY = "hashline-edit-pending-preview";
 
 function pendingPreviewLines(summary: string, preview: PendingDiffPreviewResult | undefined, expanded: boolean): { lines: string[]; diffData?: ReturnType<typeof buildDiffData>; headerLabel?: string } {
-	if (!expanded || !preview || preview.type !== "ok") return { lines: summary.split("\n") };
+	if (!preview || preview.type !== "ok") return { lines: summary.split("\n") };
 	const diffData = buildDiffData({
 		path: preview.data.filePath,
 		oldContent: preview.data.previousContent,
 		newContent: preview.data.nextContent,
 		diff: preview.data.diff,
 	});
-	const headerLine = summaryLine(preview.data.headerLabel, { hidden: false });
+	const headerLine = summaryLine(preview.data.headerLabel, { hidden: !expanded });
 	return { lines: [summary, headerLine], diffData, headerLabel: preview.data.headerLabel };
 }
 
@@ -1387,9 +1387,8 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 			const settingExpanded = resolveEditDiffDisplay() === "expanded";
 			const expanded = contextExpanded || settingExpanded;
 			const argsStable = context.argsComplete === true;
-			const previewEligible = expanded && argsStable;
-			const previewKey = previewEligible ? buildEditPreviewKey(args ?? {}) : undefined;
-			const preview = previewEligible
+			const previewKey = argsStable ? buildEditPreviewKey(args ?? {}) : undefined;
+			const preview = argsStable
 				? resolvePendingDiffPreview(
 					context,
 					EDIT_PENDING_PREVIEW_STATE_KEY,
@@ -1397,14 +1396,15 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 					() => buildPendingEditPreviewData(args ?? {}, context.cwd ?? process.cwd(), options.served),
 				)
 				: undefined;
-			const preview2: ReturnType<typeof pendingPreviewLines> = !expanded && argsStable
+			const preview2: ReturnType<typeof pendingPreviewLines> = !expanded && argsStable && preview?.type !== "ok"
 				? { lines: [text, summaryLine("pending edit", { hidden: true })], headerLabel: "pending edit" }
 				: pendingPreviewLines(text, preview, expanded);
 			if (preview2.diffData) {
+				const diffOptions = { prefixLines: preview2.lines, diffData: preview2.diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
 				const diffComponent = context.lastComponent instanceof DiffPreviewComponent
 					? context.lastComponent
-					: new DiffPreviewComponent({ prefixLines: preview2.lines, diffData: preview2.diffData, theme, expanded: true });
-				diffComponent.update({ prefixLines: preview2.lines, diffData: preview2.diffData, theme, expanded: true });
+					: new DiffPreviewComponent(diffOptions);
+				diffComponent.update(diffOptions);
 				return diffComponent;
 			}
 			const textComponent = (context.lastComponent && !(context.lastComponent instanceof DiffPreviewComponent))
@@ -1465,11 +1465,12 @@ export function registerEditTool(pi: ExtensionAPI, options: EditToolOptions = {}
 				if (info.semanticBadge) badges.push(info.semanticBadge.replace(/^✓\s*/, ""));
 				if (info.warningsBadge) badges.push(info.warningsBadge);
 				text = summaryLine(badges.join(" • "), { hidden: !!diffData && !expanded });
-				if (expanded && diffData) {
+				if (diffData) {
+					const diffOptions = { prefixLines: text.split("\n"), diffData, theme, expanded, collapsedLines: resolveEditCollapsedLines() };
 					const diffComponent = context.lastComponent instanceof DiffPreviewComponent
 						? context.lastComponent
-						: new DiffPreviewComponent({ prefixLines: text.split("\n"), diffData, theme, expanded: true });
-					diffComponent.update({ prefixLines: text.split("\n"), diffData, theme, expanded: true });
+						: new DiffPreviewComponent(diffOptions);
+					diffComponent.update(diffOptions);
 					return diffComponent;
 				}
 			}

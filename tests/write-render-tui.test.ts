@@ -78,7 +78,7 @@ describe("write TUI renderer", () => {
     expect(overwrittenRendered).toContain("▌+ 1 │ new");
 
     const collapsed: any = { content: created.content, details: { ...created.details, writeState: "overwritten", diffData: overwrittenDiffData } };
-    expect(textOf(t.renderResult(collapsed, {}, theme, {}))).toBe("↳ overwritten • Ctrl+O to expand");
+    expect(textOf(t.renderResult(collapsed, {}, theme, {}))).toBe("↳ overwritten • Ctrl+O to expand\n▌- 1 │ old\n▌+ 1 │ new");
   });
 
   it("wraps the write path title in an OSC 8 hyperlink when supported", () => {
@@ -105,23 +105,29 @@ describe("write TUI renderer", () => {
     expect(textOf(t.renderResult(failed, { expanded: true }, theme, { expanded: true }))).toContain("full detail");
   });
 
-  it("keeps a complete collapsed write preview lightweight", () => {
+  it("renders a capped preview of a complete collapsed overwrite", () => {
     const cwd = mkdtempSync(resolve(tmpdir(), "pi-write-collapsed-"));
     writeFileSync(resolve(cwd, "old.txt"), "old\n", "utf-8");
     const t = tool();
     const context: any = { argsComplete: true, executionStarted: false, cwd, state: {}, invalidate: vi.fn(), expanded: false };
 
-    buildPendingWritePreviewDataSpy.mockClear();
-    buildPendingWriteDiffDataSpy.mockClear();
     const rendered = textOf(t.renderCall({ path: "old.txt", content: "new\n" }, theme, context));
 
-    expect(buildPendingWritePreviewDataSpy).not.toHaveBeenCalled();
-    expect(buildPendingWriteDiffDataSpy).not.toHaveBeenCalled();
     expect(rendered).toContain("write ");
     expect(rendered).toContain("old.txt");
     expect(rendered).toContain("↳ pending overwrite");
     expect(rendered).toContain("Ctrl+O to expand");
     expect(rendered).not.toContain("↳ diff");
+    expect(rendered).toContain("▌+ 1 │ new");
+  });
+
+  it("keeps a collapsed pending create to its summary line", () => {
+    const cwd = mkdtempSync(resolve(tmpdir(), "pi-write-collapsed-create-"));
+    const context: any = { argsComplete: true, executionStarted: false, cwd, state: {}, invalidate: vi.fn(), expanded: false };
+    const rendered = textOf(tool().renderCall({ path: "fresh.txt", content: "new\n" }, theme, context));
+    expect(rendered.split("\n")).toHaveLength(2);
+    expect(rendered).toContain("↳ pending create");
+    expect(rendered).toContain("Ctrl+O to expand");
   });
 
   it("collapses the pending preview to just the call line once execution has started", () => {

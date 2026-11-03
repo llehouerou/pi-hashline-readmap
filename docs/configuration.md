@@ -45,7 +45,7 @@ Precedence is environment variables > project JSON > global JSON > built-in defa
   "grep": { "maxLines": 1200, "maxBytes": 40960 },
   "mapCache": { "dir": ".cache/hashline/maps", "enabled": true },
   "gdscript": { "enabled": false },
-  "edit": { "diffDisplay": "collapsed" },
+  "edit": { "diffDisplay": "collapsed", "collapsedLines": 12 },
   "display": { "previewLines": 5 },
   "bash": { "shellPath": "C:/Program Files/Git/bin/bash.exe" }
 }
@@ -61,10 +61,11 @@ Precedence is environment variables > project JSON > global JSON > built-in defa
 | `mapCache.enabled` | `PI_HASHLINE_NO_PERSIST_MAPS=1` | Defaults to `true`; the environment variable disables on-disk map caching regardless of JSON. |
 | `gdscript.enabled` | `PI_HASHLINE_GDSCRIPT` | Defaults to `false`; exact environment value `1` enables the dedicated GDScript mapper and takes precedence over JSON. |
 | `edit.diffDisplay` | `PI_HASHLINE_EDIT_DIFF_DISPLAY` | Defaults to `collapsed`; `expanded` renders diffs inline without Ctrl+O. Project JSON overrides global JSON. The environment override is case-insensitive (`expanded`/`collapsed` in any casing, with surrounding whitespace trimmed); unrecognized values are ignored and fall through to JSON, then the default. |
+| `edit.collapsedLines` | `PI_HASHLINE_EDIT_COLLAPSED_LINES` | Defaults to `12`; caps the rendered rows of the collapsed `edit`/`write` diff preview (changed lines plus one adjacent context line), followed by a `… (K more diff lines • Ctrl+O to expand)` hint when rows are hidden. Set `0` for the summary line alone. It is a non-negative base-10 integer; invalid environment values fall through to JSON, then the default. Project JSON overrides global JSON. |
 | `display.previewLines` | `PI_HASHLINE_PREVIEW_LINES` | Defaults to `5`; controls trailing lines of collapsed `bash`, `read`, and `grep` output. Set `0` for content-free summaries. It is a non-negative base-10 integer; invalid environment values fall through to JSON, then the default. Project JSON overrides global JSON. |
 | `bash.shellPath` | `PI_HASHLINE_SHELL_PATH` | Absolute shell path. It is forwarded to Pi's built-in Bash tool. Precedence: whitespace-trimmed non-empty `PI_HASHLINE_SHELL_PATH`, project/global Hashline JSON, pi's own configured `shellPath` from `~/.pi/agent/settings.json`, then upstream shell resolution. |
 
-Budget fields must be strict positive base-10 integers except `display.previewLines`, which also accepts `0`. For strict-positive fields, zero is rejected; negative, signed, decimal, hexadecimal, exponent notation, separators, empty strings, and whitespace-only values are ignored. Boolean fields must be JSON booleans, and mapCache.dir must be a non-empty string. Malformed JSON and invalid fields degrade safely: valid fields continue to apply where practical, invalid fields are ignored, project parse failure does not suppress valid global settings, and warnings identify bad input without aborting extension startup.
+Budget fields must be strict positive base-10 integers except `display.previewLines` and `edit.collapsedLines`, which also accept `0`. For strict-positive fields, zero is rejected; negative, signed, decimal, hexadecimal, exponent notation, separators, empty strings, and whitespace-only values are ignored. Boolean fields must be JSON booleans, and mapCache.dir must be a non-empty string. Malformed JSON and invalid fields degrade safely: valid fields continue to apply where practical, invalid fields are ignored, project parse failure does not suppress valid global settings, and warnings identify bad input without aborting extension startup.
 
 A settings section for the Bash context guard, removed in 0.20.0, is ignored without a warning.
 

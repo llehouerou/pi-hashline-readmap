@@ -7,7 +7,7 @@ export interface HashlineJsonSettings {
   grep?: { maxLines?: number; maxBytes?: number };
   mapCache?: { dir?: string; enabled?: boolean };
   gdscript?: { enabled?: boolean };
-  edit?: { diffDisplay?: "collapsed" | "expanded" };
+  edit?: { diffDisplay?: "collapsed" | "expanded"; collapsedLines?: number };
   display?: { previewLines?: number };
   bash?: { shellPath?: string };
 }
@@ -199,6 +199,8 @@ function validateSettings(raw: unknown, source: string, rawText: string): Hashli
       if (value === "collapsed" || value === "expanded") edit.diffDisplay = value;
       else warnings.push(invalid(source, "edit.diffDisplay"));
     }
+    const collapsedLines = readNonNegative(raw.edit, "collapsedLines", "edit.collapsedLines", source, rawText, warnings);
+    if (collapsedLines !== undefined) edit.collapsedLines = collapsedLines;
     if (Object.keys(edit).length > 0) settings.edit = edit;
   }
   if (isRecord(raw.bash)) {
@@ -264,6 +266,15 @@ export function resolveEditDiffDisplay(env: NodeJS.ProcessEnv = process.env): "c
   const json = resolveHashlineJsonSettings().settings.edit?.diffDisplay;
   if (json === "expanded" || json === "collapsed") return json;
   return "collapsed";
+}
+
+const DEFAULT_EDIT_COLLAPSED_LINES = 12;
+export function resolveEditCollapsedLines(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.PI_HASHLINE_EDIT_COLLAPSED_LINES?.trim();
+  if (raw !== undefined && /^(0|[1-9][0-9]*)$/.test(raw) && Number.isSafeInteger(Number(raw))) return Number(raw);
+  const json = resolveHashlineJsonSettings().settings.edit?.collapsedLines;
+  if (typeof json === "number" && Number.isSafeInteger(json) && json >= 0) return json;
+  return DEFAULT_EDIT_COLLAPSED_LINES;
 }
 
 const DEFAULT_PREVIEW_LINES = 5;

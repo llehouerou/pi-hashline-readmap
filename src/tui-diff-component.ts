@@ -22,6 +22,8 @@ export interface DiffPreviewComponentOptions {
 	theme: RendererTheme;
 	/** Whether the diff body should render in expanded form. */
 	expanded: boolean;
+	/** Rendered row budget of the collapsed preview (0 = header and hint only). */
+	collapsedLines?: number;
 	/**
 	 * Optional fallback width used when render() receives an invalid width
 	 * (zero, negative, NaN). Defaults to 80.
@@ -79,6 +81,7 @@ export class DiffPreviewComponent implements Component {
 			width: normalized,
 			theme: this.options.theme,
 			expanded: this.options.expanded,
+			collapsedLines: this.options.collapsedLines,
 		});
 		for (const line of body.lines) lines.push(line);
 		for (const suffix of this.options.suffixLines ?? []) {

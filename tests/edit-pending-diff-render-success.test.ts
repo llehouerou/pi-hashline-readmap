@@ -97,7 +97,7 @@ describe("edit renderCall pending diff preview", () => {
 		expect(buildDiffDataSpy).not.toHaveBeenCalled();
 	});
 
-	it("keeps a complete collapsed edit preview lightweight", () => {
+	it("renders a capped preview of a complete collapsed edit", async () => {
 		const cwd = mkdtempSync(resolve(tmpdir(), "pi-edit-collapsed-"));
 		const filePath = resolve(cwd, "sample.ts");
 		writeFileSync(filePath, "const unique = 1;\n", "utf-8");
@@ -105,15 +105,17 @@ describe("edit renderCall pending diff preview", () => {
 		const context: any = { argsComplete: true, executionStarted: false, expanded: false, cwd, state: {}, invalidate: vi.fn() };
 		const args = { path: filePath, edits: [{ replace: { old_text: "const unique = 1;", new_text: "const unique = 2;" } }] };
 
+		const first = textOf(tool.renderCall(args, theme, context));
+		expect(first).toContain("pending edit");
+		expect(first).toContain("Ctrl+O to expand");
+		await Promise.resolve();
 		const rendered = textOf(tool.renderCall(args, theme, context));
 
-		expect(buildPendingEditPreviewDataSpy).not.toHaveBeenCalled();
-		expect(generateDiffStringSpy).not.toHaveBeenCalled();
-		expect(buildDiffDataSpy).not.toHaveBeenCalled();
-		expect(rendered).toContain("edit");
+		expect(buildPendingEditPreviewDataSpy).toHaveBeenCalledTimes(1);
 		expect(rendered).toContain("pending edit");
 		expect(rendered).toContain("Ctrl+O to expand");
 		expect(rendered).not.toContain("↳ diff");
+		expect(rendered).toContain("▌+ 1 │ const unique = 2;");
 	});
 
 	it("renders the full diff body when expanded", async () => {

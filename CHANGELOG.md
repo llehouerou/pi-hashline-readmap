@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - A `bash` anti-pattern hint names only active tools: with `grep` inactive (`--exclude-tools grep`), `rg foo` carries no `Prefer the grep tool` hint, and the same holds for `find`'s file-search hint and the `read` and `edit` hints.
+- Collapsed `edit` and `write` (overwrite) diffs, final and pending, show a preview under the summary line instead of nothing: changed lines plus one adjacent context line, capped at `edit.collapsedLines` rendered rows (env `PI_HASHLINE_EDIT_COLLAPSED_LINES`, default 12, `0` restores the summary line alone), then a `… (K more diff lines • Ctrl+O to expand)` hint. The pending preview is now computed in collapsed mode too. Expanded rendering is unchanged.
 - `read` without `offset`, `limit`, or `symbol` of a file over 400 lines or 15,000 characters returns its first window (up to 200 lines / 10,000 characters) plus its structural map, and says how to fetch the rest with `offset`/`limit` or `symbol`. Whole reads of large files cost the most context for the least use; an explicit `limit` still reads further at once. Smaller files are unchanged.
 
 ### Added
