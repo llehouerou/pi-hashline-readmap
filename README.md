@@ -171,7 +171,7 @@ npm run build   # optional: bundle dist/index.js for faster Pi startup
 npm pack --dry-run
 ```
 
-`npm run build` bundles the extension into `dist/index.js`; Pi loads it when present and falls back to `index.ts` otherwise (see [AGENTS.md](https://github.com/coctostan/pi-hashline-readmap/blob/main/AGENTS.md) and [startup performance](docs/startup-performance.md)).
+`npm run build` bundles the extension into `dist/index.js`; Pi loads it through the `pi.extensions` manifest. Installs build it in `prepare`; an unbuilt checkout loads only through `-e <dir>`, which falls back to `index.ts` (see [AGENTS.md](https://github.com/coctostan/pi-hashline-readmap/blob/main/AGENTS.md) and [startup performance](docs/startup-performance.md)).
 
 Project layout:
 

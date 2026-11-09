@@ -1,6 +1,6 @@
 // Bundles index.ts into dist/index.js (see AGENTS.md "Build contract").
-//   node scripts/build.mjs             strict: exit 1 on failure (npm run build, prepublishOnly)
-//   node scripts/build.mjs --optional  warn, remove any stale dist/, exit 0 (prepare: installs must not break)
+//   node scripts/build.mjs  exit 1 on failure (npm run build, prepare, prepublishOnly). It never
+//   falls back: Pi loads an installed package only from its manifest entry, dist/index.js.
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,24 +54,17 @@ export async function buildBundle({ rootDir = ROOT, outDir = join(rootDir, "dist
   return outDir;
 }
 
-export async function runBuildCli(argv, { build = buildBundle, log = console, distDir = join(ROOT, "dist") } = {}) {
-  const optional = argv.includes("--optional");
+export async function runBuildCli({ build = buildBundle, log = console } = {}) {
   try {
     await build();
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (optional) {
-      // A dist/ from an earlier build would still win over index.ts in the manifest and run stale code.
-      rmSync(distDir, { recursive: true, force: true });
-      log.warn(`[pi-hashline-readmap] skipped dist build: ${message}\nPi will load index.ts instead.`);
-      return 0;
-    }
     log.error(`[pi-hashline-readmap] build failed: ${message}`);
     return 1;
   }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = await runBuildCli(process.argv.slice(2));
+  process.exitCode = await runBuildCli();
 }

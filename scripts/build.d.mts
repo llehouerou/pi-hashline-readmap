@@ -4,12 +4,7 @@ export function buildBundle(options?: {
   outDir?: string;
   verify?: (input: { code: string; metafile: any }) => void;
 }): Promise<string>;
-export function runBuildCli(
-  argv: string[],
-  deps?: {
-    build?: () => Promise<unknown>;
-    /** dist/ directory removed when an --optional build fails (default: <package root>/dist). */
-    distDir?: string;
-    log?: { warn(message: string): void; error(message: string): void };
-  },
-): Promise<number>;
+export function runBuildCli(deps?: {
+  build?: () => Promise<unknown>;
+  log?: { error(message: string): void };
+}): Promise<number>;
